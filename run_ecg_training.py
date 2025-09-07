@@ -1,7 +1,6 @@
 import argparse
 import time
 
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,6 +10,7 @@ from torchvision import datasets
 from torchvision import transforms
 
 from losses import TripletPlusCe
+import matplotlib.pyplot as plt
 
 from ecg_dataset import build_dataset
 from ecg_model import create_ecg_model
@@ -98,10 +98,12 @@ def main(args : argparse.Namespace):
     print(f'Strat training for {args.epochs} epochs')
     start_time = time.time()
     max_acc = 0.0
+    
+    t_loss_vec, t_acc_vec, v_loss_vec, v_acc_vec = [], [], [], []
 
     # 训练
     for epoch in range(args.epochs): 
-        train_one_epoch(
+        t_loss, t_acc = train_one_epoch(
             model=model,
             criterion=criterion,
             data_loader=dataloader_train,
@@ -110,7 +112,7 @@ def main(args : argparse.Namespace):
             epoch=epoch,
             args=args
         )
-        val_one_epoch(
+        v_loss, v_acc = val_one_epoch(
             data_loader=dataloader_val,
             model=model,
             device=device,
@@ -121,6 +123,34 @@ def main(args : argparse.Namespace):
         dataset_train.set_samples()
         # 更新学习率
         scheduler.step()
+    
+    # 画图
+    xr = args.epochs
+    plt.figure()
+    plt.plot(list(range(xr)), t_acc_vec, label='train')
+    plt.plot(list(range(xr)), v_acc_vec, label='valid', ls='--')
+    plt.xlabel('epoch')
+    plt.ylabel('acc')
+    plt.xticks()
+    plt.yticks()
+    plt.title(f'{args.model} acc')
+    plt.legend()
+    plt.grid(ls='--')
+    plt.savefig(f'{args.output_dir}{args.model}_acc.png')
+    plt.show()
+
+    # 损失函数图
+    plt.figure()
+    plt.plot(list(range(xr)), t_loss_vec, label='train')
+    plt.plot(list(range(xr)), v_loss_vec, label='valid', ls='--')
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.xticks()
+    plt.yticks()
+    plt.title(f'{args.model} loss')
+    plt.legend()
+    plt.grid(ls='--')
+    plt.savefig(f'{args.output_dir}{args.model}_loss.png')
 
 if __name__ == '__main__':
     args = get_args()

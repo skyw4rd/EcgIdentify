@@ -87,6 +87,8 @@ def train_one_epoch(model: torch.nn.Module,
             epoch_loss += loss / len(data_loader)
 
     print(f"Epoch {epoch + 1}: train_loss : {epoch_loss:.4f} - train_acc: {epoch_acc:.4f}\n")
+
+    return epoch_loss, epoch_acc
     
 def val_one_epoch(data_loader, model, device, epoch):
     criterion = torch.nn.CrossEntropyLoss()
@@ -105,3 +107,5 @@ def val_one_epoch(data_loader, model, device, epoch):
         epoch_loss += loss / len(data_loader)
         epoch_acc += acc / len(data_loader)
     print(f"Epoch {epoch + 1}: val_loss : {epoch_loss:.4f} - val_acc: {epoch_acc:.4f}\n\n")
+
+    return epoch_loss, epoch_acc
