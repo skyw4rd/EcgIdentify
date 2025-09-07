@@ -119,6 +119,11 @@ def main(args : argparse.Namespace):
             epoch=epoch,
         )
         
+        t_loss_vec.append(t_loss)
+        t_acc_vec.append(t_acc)
+        v_loss_vec.append(v_loss)
+        v_acc_vec.append(v_acc)
+
         # 更新Dataset
         dataset_train.set_samples()
         # 更新学习率
