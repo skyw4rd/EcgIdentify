@@ -63,7 +63,7 @@ class EcgImage(data.Dataset):
         while len(tmp_dict) > 0:
             choose_classes = []
             if len(tmp_dict.keys()) >= self.batch_classes_num:
-                choose_classes = random.sample(tmp_dict.keys(), self.batch_classes_num)
+                choose_classes = random.sample(list(tmp_dict.keys()), self.batch_classes_num)
             elif len(tmp_dict.keys()) > 0:
                 choose_classes = list(tmp_dict.keys())
             else:
