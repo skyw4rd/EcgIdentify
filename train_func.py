@@ -83,8 +83,8 @@ def train_one_epoch(model: torch.nn.Module,
             # for idx, true, pred in zip(error_indices, error_true_labels, error_pred_labels):
                 # data_set.priority_class_counters[true.item()][pred.item()] += 1
             acc = (outputs.argmax(dim=1) == targets).float().mean()
-            epoch_acc += acc / len(data_loader)
-            epoch_loss += loss / len(data_loader)
+            epoch_acc += acc.cpu().item() / len(data_loader)
+            epoch_loss += loss.cpu().item() / len(data_loader)
 
     print(f"Epoch {epoch + 1}: train_loss : {epoch_loss:.4f} - train_acc: {epoch_acc:.4f}\n")
 
@@ -104,8 +104,8 @@ def val_one_epoch(data_loader, model, device, epoch):
         # acc1 = accuracy(outputs, targets, topk=(1,))[0]
         
         acc = (outputs.argmax(dim=1) == targets).float().mean()
-        epoch_loss += loss / len(data_loader)
-        epoch_acc += acc / len(data_loader)
+        epoch_loss += loss.cpu().item() / len(data_loader)
+        epoch_acc += acc.cpu().item() / len(data_loader)
     print(f"Epoch {epoch + 1}: val_loss : {epoch_loss:.4f} - val_acc: {epoch_acc:.4f}\n\n")
 
     return epoch_loss, epoch_acc
