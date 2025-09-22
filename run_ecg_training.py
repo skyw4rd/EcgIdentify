@@ -21,20 +21,20 @@ from train_func import train_one_epoch, val_one_epoch
 def get_args():
     # 超参数
     parser = argparse.ArgumentParser('teacher model ecg training script', add_help=False)
-    parser.add_argument('--batch_size', default=32, type=int)
-    parser.add_argument('--batch_classes_num', default=8, type=int)
+    parser.add_argument('--batch-size', default=32, type=int)
+    parser.add_argument('--batch-classes_num', default=8, type=int)
     parser.add_argument('--epochs', default=40, type=int)
     
     # 模型参数
     parser.add_argument('--model', default='regnety_002', type=str)
-    parser.add_argument('--input_size', default=224, type=int)
+    parser.add_argument('--input-size', default=224, type=int)
     
     # 优化器参数
     parser.add_argument('--opt', default='adamw', type=str)
 
     # 学习率参数
     parser.add_argument('--lr', default=0.005, type=float)
-    parser.add_argument('--step_size', default=10, type=int)
+    parser.add_argument('--step-size', default=10, type=int)
     parser.add_argument('--gamma', default=0.5, type=float)
     
     # 数据集参数
@@ -44,7 +44,7 @@ def get_args():
     #    -- test/
     parser.add_argument('--data-path', default='ecg_id_img/', type=str)
     parser.add_argument('--output-dir', default='', type=str)
-    parser.add_argument('-device', default='cuda', type=str)
+    parser.add_argument('--device', default='cuda', type=str)
 
     return parser.parse_args()
 

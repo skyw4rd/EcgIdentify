@@ -1,10 +1,9 @@
 import torch
 
 from typing import Iterable, Optional
-from ecg_dataset import EcgImage
 from losses import TripletPlusCe
 
-from timm.utils import accuracy
+# from timm.utils import accuracy
 
 def get_mask(batch_shape):
     classes_num, embedding_num = batch_shape
