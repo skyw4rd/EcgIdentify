@@ -21,6 +21,7 @@ def get_mask(batch_shape):
     return positive_mask, negative_mask
 
 def train_one_epoch(model: torch.nn.Module,
+                    model_features: torch.nn.Model,
                     criterion: TripletPlusCe,
                     data_loader: Iterable,
                     optimizer: torch.optim.Optimizer,
@@ -37,6 +38,10 @@ def train_one_epoch(model: torch.nn.Module,
     for data, targets in data_loader:
             data, targets = data.to(device), targets.to(device)
             embeddings = model.forward_embeddings(data)
+
+            # 中间特征层
+            multi_features = model_features(data)
+
             outputs = model.forward(data)
             # outputs = ecg_model.get_outputs(embeddings)
             # embeddings = embeddings.reshape(8, 4, 368)

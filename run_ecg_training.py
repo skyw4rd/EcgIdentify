@@ -13,7 +13,7 @@ from losses import TripletPlusCe
 import matplotlib.pyplot as plt
 
 from ecg_dataset import build_dataset
-from ecg_model import create_ecg_model
+from ecg_model import create_ecg_model, create_feature_ecg_model
 from train_func import train_one_epoch, val_one_epoch
 # from timm.optim import create_optimizer
 
@@ -84,6 +84,8 @@ def main(args : argparse.Namespace):
     print(f'Creating model: {args.model}')
     model = create_ecg_model(args=args)
     model.to(device)
+    model_features = create_feature_ecg_model(args=args)
+    model_features.to(device)
 
     # 优化器 
     # optimizer = create_optimizer(args, model)
@@ -105,6 +107,7 @@ def main(args : argparse.Namespace):
     for epoch in range(args.epochs): 
         t_loss, t_acc = train_one_epoch(
             model=model,
+            model_features = model_features,
             criterion=criterion,
             data_loader=dataloader_train,
             optimizer=optimizer,

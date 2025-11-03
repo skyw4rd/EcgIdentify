@@ -44,10 +44,19 @@ class EcgModel(nn.Module):
         embeddings = self.backbone(data)
         return self.original_fc(embeddings)
 
+def create_feature_ecg_model(args):
+    model_features = timm.create_model(
+                                    args.model,
+                                    features_only=True,
+                                    num_classes=args.nb_classes,
+                                    pretrained=True,
+                                    out_indices=[1, 2, 3, 4]).to('cuda')
+    return model_features
+
 def create_ecg_model(args):
     ecg_model = EcgModel(
         model_name=args.model,
-        pretrained=False,
+        pretrained=True,
         num_classes=args.nb_classes
     )
 
