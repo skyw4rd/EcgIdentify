@@ -1,5 +1,6 @@
 import argparse
 import time
+import logging
 
 import torch
 import torch.nn as nn
@@ -17,6 +18,10 @@ from ecg_model import create_ecg_model, create_feature_ecg_model
 from train_func import train_one_epoch, val_one_epoch
 # from timm.optim import create_optimizer
 
+'''init logger'''
+logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 def get_args():
     # 超参数

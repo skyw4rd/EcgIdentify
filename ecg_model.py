@@ -4,7 +4,6 @@ import timm
 
 # 一个batch的构成32个人一个人1张图
 
-
 class EcgModel(nn.Module):
     def __init__(self, model_name, num_classes=90, target_dim=128, pretrained=True):
         super().__init__()
