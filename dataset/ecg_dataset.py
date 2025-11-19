@@ -10,7 +10,6 @@ from PIL import Image
 from torchvision import transforms
 import copy
 
-
 # IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".ppm", ".bmp", ".pgm", ".tif", ".tiff", ".webp")
 
 def pil_loader(path: str) -> Image.Image:
@@ -77,8 +76,8 @@ class EcgImage(data.Dataset):
                 if len(tmp_dict[class_idx]) == 0:
                     del tmp_dict[class_idx]
     
-    def get_triplet_batchsize(self):
-        return self.triplet_batchsize
+    # def get_triplet_batchsize(self):
+        # return self.triplet_batchsize
     
     def get_samples(self):
         return self.samples
@@ -157,9 +156,3 @@ def build_dataset(args):
         triplet_batch=(batch_classes_num, batch_img_num))
     
     return dataset, dataset.get_nb_classes() 
-    
-
-# def select_triplet(directory: str):
-
-# class Triplet(data.Dataset):
-    # def __init__(self, root, num_cls):

@@ -13,7 +13,7 @@ from torchvision import transforms
 from losses import TripletPlusCe
 import matplotlib.pyplot as plt
 
-from ecg_dataset import build_dataset
+from dataset import build_dataset
 from ecg_model import create_ecg_model, create_feature_ecg_model
 from train_func import train_one_epoch, val_one_epoch
 # from timm.optim import create_optimizer
@@ -57,7 +57,7 @@ def main(args : argparse.Namespace):
     print(args)
     device = torch.device(args.device)
 
-    # 训练集和验证集 
+    # build dataloader
     dataset_train, args.nb_classes = build_dataset(args=args)
 
     data_transform = transforms.Compose([
@@ -112,7 +112,6 @@ def main(args : argparse.Namespace):
     for epoch in range(args.epochs): 
         t_loss, t_acc = train_one_epoch(
             model=model,
-            model_features = model_features,
             criterion=criterion,
             data_loader=dataloader_train,
             optimizer=optimizer,

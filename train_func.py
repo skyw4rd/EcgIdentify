@@ -1,7 +1,7 @@
 import torch
 
 from typing import Iterable, Optional
-from losses import TripletPlusCe
+from losses import *
 
 # from timm.utils import accuracy
 
@@ -21,8 +21,9 @@ def get_mask(batch_shape):
     return positive_mask, negative_mask
 
 def train_one_epoch(model: torch.nn.Module,
-                    model_features: torch.nn.Model,
-                    criterion: TripletPlusCe,
+                    feature_loss: KDLoss,
+                    triple_loss: TripletPlusCe,
+                    loss_fn: torch.nn.Module,
                     data_loader: Iterable,
                     optimizer: torch.optim.Optimizer,
                     device: torch.device,
@@ -40,8 +41,7 @@ def train_one_epoch(model: torch.nn.Module,
             embeddings = model.forward_embeddings(data)
 
             # 中间特征层
-            multi_features = model_features(data)
-
+            # multi_features = model_features(data)
             outputs = model.forward(data)
             # outputs = ecg_model.get_outputs(embeddings)
             # embeddings = embeddings.reshape(8, 4, 368)
@@ -71,8 +71,12 @@ def train_one_epoch(model: torch.nn.Module,
             # print(hardest_negative_idxs)
             negatives = embeddings[hardest_negative_idxs]
         
+            if not args.kd:
+                output = model(data)
+                loss = loss_fn(output, targets)
+            else:
             # 总损失 = 交叉熵 + 三元损失
-            loss = criterion(embeddings, positives, negatives, outputs, targets)
+                loss = triple_loss(embeddings, positives, negatives, outputs, targets)
             # print(loss)
             optimizer.zero_grad()
             loss.backward()
