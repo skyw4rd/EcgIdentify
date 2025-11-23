@@ -1,10 +1,13 @@
+"""
+训练
+"""
 import argparse
 import time
 import logging
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn
+from torch import optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torchvision import datasets
@@ -18,22 +21,24 @@ from ecg_model import create_ecg_model, create_feature_ecg_model
 from train_func import train_one_epoch, val_one_epoch
 # from timm.optim import create_optimizer
 
-'''init logger'''
-logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
+logging.basicConfig(
+    format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
 def get_args():
     # 超参数
-    parser = argparse.ArgumentParser('teacher model ecg training script', add_help=False)
+    parser = argparse.ArgumentParser(
+        'teacher model ecg training script', add_help=False)
     parser.add_argument('--batch-size', default=32, type=int)
     parser.add_argument('--batch-classes_num', default=8, type=int)
     parser.add_argument('--epochs', default=40, type=int)
-    
+
     # 模型参数
     parser.add_argument('--model', default='regnety_002', type=str)
     parser.add_argument('--input-size', default=224, type=int)
-    
+
     # 优化器参数
     parser.add_argument('--opt', default='adamw', type=str)
 
@@ -41,7 +46,7 @@ def get_args():
     parser.add_argument('--lr', default=0.005, type=float)
     parser.add_argument('--step-size', default=10, type=int)
     parser.add_argument('--gamma', default=0.5, type=float)
-    
+
     # 数据集参数
     # -- dataset/
     #    -- train/
@@ -53,7 +58,8 @@ def get_args():
 
     return parser.parse_args()
 
-def main(args : argparse.Namespace):
+
+def main(args: argparse.Namespace):
     print(args)
     device = torch.device(args.device)
 
@@ -65,10 +71,10 @@ def main(args : argparse.Namespace):
         transforms.ToTensor(),
     ])
     dataset_val = datasets.ImageFolder(
-        root=args.data_path + 'val', 
+        root=args.data_path + 'val',
         transform=data_transform
     )
-    
+
     dataloader_train = DataLoader(
         dataset_train,
         batch_size=args.batch_size,
@@ -76,7 +82,7 @@ def main(args : argparse.Namespace):
         num_workers=4,
         pin_memory=False
     )
-    
+
     dataloader_val = DataLoader(
         dataset_val,
         batch_size=args.batch_size,
@@ -84,7 +90,7 @@ def main(args : argparse.Namespace):
         num_workers=4,
         pin_memory=False
     )
-    
+
     # 创建模型
     print(f'Creating model: {args.model}')
     model = create_ecg_model(args=args)
@@ -92,7 +98,7 @@ def main(args : argparse.Namespace):
     model_features = create_feature_ecg_model(args=args)
     model_features.to(device)
 
-    # 优化器 
+    # 优化器
     # optimizer = create_optimizer(args, model)
     optimizer = optim.Adam(model.parameters(), args.lr)
     scheduler = StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
@@ -103,16 +109,16 @@ def main(args : argparse.Namespace):
         cross_entropy_loss=nn.CrossEntropyLoss()
     )
     print(f'Strat training for {args.epochs} epochs')
-    start_time = time.time()
-    max_acc = 0.0
-    
+    # start_time = time.time()
+    # max_acc = 0.0
+
     t_loss_vec, t_acc_vec, v_loss_vec, v_acc_vec = [], [], [], []
 
     # 训练
-    for epoch in range(args.epochs): 
+    for epoch in range(args.epochs):
         t_loss, t_acc = train_one_epoch(
             model=model,
-            criterion=criterion,
+            loss_fn=criterion,
             data_loader=dataloader_train,
             optimizer=optimizer,
             device=device,
@@ -125,7 +131,7 @@ def main(args : argparse.Namespace):
             device=device,
             epoch=epoch,
         )
-        
+
         t_loss_vec.append(t_loss)
         t_acc_vec.append(t_acc)
         v_loss_vec.append(v_loss)
@@ -135,7 +141,7 @@ def main(args : argparse.Namespace):
         dataset_train.set_samples()
         # 更新学习率
         scheduler.step()
-    
+
     # 画图
     xr = args.epochs
     plt.figure()
@@ -163,6 +169,7 @@ def main(args : argparse.Namespace):
     plt.legend()
     plt.grid(ls='--')
     plt.savefig(f'{args.output_dir}{args.model}_loss.png')
+
 
 if __name__ == '__main__':
     args = get_args()

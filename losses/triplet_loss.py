@@ -1,18 +1,35 @@
+"""
+三元损失
+"""
 import torch
-from torch.nn import functional as F
+from torch import nn
+from .loss import Loss
 
-class TripletPlusCe(torch.nn.Module):
-    def __init__(self, triplet_loss: torch.nn.Module, cross_entropy_loss: torch.nn.Module):
+
+class TripletPlusCe(Loss):
+    def __init__(self, model: nn.Module):
         super().__init__()
-        self.cross_entropy_loss = cross_entropy_loss
-        self.triplet_loss = triplet_loss
-    
-    def forward(self, anchors, postives, negatives, outputs, labels):
-        ce_loss = self.cross_entropy_loss(outputs, labels)
-        triplet_loss = self.triplet_loss(anchors, postives, negatives)
-        loss = ce_loss + triplet_loss
-        return loss
+        self.model = model
 
-def create_criterion():
-    # TODD
-    return None
+    def __call__(self):
+        pass
+
+
+def get_mask(batch_shape):
+    """
+    加速正负样本的查找
+    """
+    classes_num, embedding_num = batch_shape
+    batch_size = classes_num * embedding_num
+    positive_mask, negative_mask = torch.full(
+        (batch_size, batch_size), True), torch.full((batch_size, batch_size), False)
+    for s in range(0, batch_size, embedding_num):
+        for i in range(embedding_num):
+            for j in range(embedding_num):
+                if i != j:
+                    positive_mask[s + i][s + j] = False
+    for s in range(0, batch_size, embedding_num):
+        for i in range(embedding_num):
+            for j in range(embedding_num):
+                negative_mask[s + i][s + j] = True
+    return positive_mask, negative_mask
