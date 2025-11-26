@@ -106,7 +106,7 @@ class KDLoss(Loss):
                 partial(self._forward_hook, name=point_name, is_tea=is_tea))
         # return register_points
 
-    def _forward_hook(self, module: nn.Module, input, output, name: str, is_tea=False):
+    def _forward_hook(self, module, input, output, name: str, is_tea=False):
         if is_tea:
             self._tea_out[name] = output[0] if len(output) == 1 else output
         else:

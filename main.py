@@ -2,7 +2,6 @@
 训练
 """
 import argparse
-import time
 import logging
 
 import torch
@@ -13,11 +12,12 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision import transforms
 
-from losses import TripletPlusCe
+from losses import *
+from models import *
 import matplotlib.pyplot as plt
 
 from dataset import build_dataset
-from ecg_model import create_ecg_model, create_feature_ecg_model
+from teacher_model import create_teacher_model 
 from train_func import train_one_epoch, val_one_epoch
 # from timm.optim import create_optimizer
 
@@ -46,6 +46,9 @@ def get_args():
     parser.add_argument('--lr', default=0.005, type=float)
     parser.add_argument('--step-size', default=10, type=int)
     parser.add_argument('--gamma', default=0.5, type=float)
+    
+    # 是否开启蒸馏
+    parser.add_argument('--kd', default=False, type=bool)
 
     # 数据集参数
     # -- dataset/
@@ -93,24 +96,21 @@ def main(args: argparse.Namespace):
 
     # 创建模型
     print(f'Creating model: {args.model}')
-    model = create_ecg_model(args=args)
-    model.to(device)
-    model_features = create_feature_ecg_model(args=args)
-    model_features.to(device)
-
-    # 优化器
-    # optimizer = create_optimizer(args, model)
-    optimizer = optim.Adam(model.parameters(), args.lr)
+    teacher_model = create_teacher_model(args=args)
+    teacher_model.to(device)
     scheduler = StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
-
     # 损失函数
-    criterion = TripletPlusCe(
-        triplet_loss=nn.TripletMarginLoss(margin=1.2, p=2),
-        cross_entropy_loss=nn.CrossEntropyLoss()
-    )
+    if args.kd:
+        optimizer = optim.Adam(teacher_model.parameters(), args.lr)
+        loss_fn = TripletLoss(model=teacher_model)
+        model = teacher_model
+    else:
+        student_model = mobilenetv1().to(device)
+        optimizer = optim.Adam(student_model.parameters(), args.lr)
+        loss_fn = KDLoss(student=('mobilenet_v1', student_model), teacher=('resnet50', teacher_model), ori_loss=nn.CrossEntropyLoss()) 
+        model = student_model
+
     print(f'Strat training for {args.epochs} epochs')
-    # start_time = time.time()
-    # max_acc = 0.0
 
     t_loss_vec, t_acc_vec, v_loss_vec, v_acc_vec = [], [], [], []
 
@@ -118,7 +118,7 @@ def main(args: argparse.Namespace):
     for epoch in range(args.epochs):
         t_loss, t_acc = train_one_epoch(
             model=model,
-            loss_fn=criterion,
+            loss_fn=loss_fn,
             data_loader=dataloader_train,
             optimizer=optimizer,
             device=device,

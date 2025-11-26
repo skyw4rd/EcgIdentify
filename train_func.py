@@ -9,25 +9,8 @@ from losses import *
 # from timm.utils import accuracy
 
 
-def get_mask(batch_shape):
-    classes_num, embedding_num = batch_shape
-    batch_size = classes_num * embedding_num
-    positive_mask, negative_mask = torch.full(
-        (batch_size, batch_size), True), torch.full((batch_size, batch_size), False)
-    for s in range(0, batch_size, embedding_num):
-        for i in range(embedding_num):
-            for j in range(embedding_num):
-                if i != j:
-                    positive_mask[s + i][s + j] = False
-    for s in range(0, batch_size, embedding_num):
-        for i in range(embedding_num):
-            for j in range(embedding_num):
-                negative_mask[s + i][s + j] = True
-    return positive_mask, negative_mask
-
-
 def train_one_epoch(model: torch.nn.Module,
-                    loss_fn: torch.nn.Module,
+                    loss_fn: Loss,
                     data_loader: Iterable,
                     optimizer: torch.optim.Optimizer,
                     device: torch.device,
