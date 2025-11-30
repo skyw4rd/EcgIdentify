@@ -13,25 +13,25 @@ from rich.progress import (
 
 from losses import *
 
-progress = Progress(
-    # [动态文本列] 显示 Epoch 信息，使用 {task.description} 占位
-    TextColumn("[bold white]{task.description}", justify="right"),
+# progress = Progress(
+    # # [动态文本列] 显示 Epoch 信息，使用 {task.description} 占位
+    # TextColumn("[bold white]{task.description}", justify="right"),
 
-    # [进度条列] 设定轨道为暗白(灰)，进度为纯白
-    BarColumn(
-        bar_width=40,
-        style="dim white",       # 轨道颜色
-        complete_style="white",  # 完成部分颜色
-        finished_style="white"   # 完成后的颜色
-    ),
+    # # [进度条列] 设定轨道为暗白(灰)，进度为纯白
+    # BarColumn(
+        # bar_width=40,
+        # style="dim white",       # 轨道颜色
+        # complete_style="white",  # 完成部分颜色
+        # finished_style="white"   # 完成后的颜色
+    # ),
 
-    # [百分比列] 强制白色
-    TaskProgressColumn(style="white"),
+    # # [百分比列] 强制白色
+    # TaskProgressColumn(style="white"),
 
-    # [时间列] 自定义格式：只显示秒数，例如 "12.5s"
-    # 这里直接调用 task.elapsed 获取耗时
-    TextColumn("[white]{task.elapsed:.1f}s"),
-)
+    # # [时间列] 自定义格式：只显示秒数，例如 "12.5s"
+    # # 这里直接调用 task.elapsed 获取耗时
+    # TextColumn("[white]{task.elapsed:.1f}s"),
+# )
 
 
 def train_one_epoch(model: torch.nn.Module,
@@ -49,25 +49,22 @@ def train_one_epoch(model: torch.nn.Module,
     epoch_loss = 0.0
     epoch_acc = 0.0
     
-    with progress:
-        task = progress.add_task(f"Epoch {epoch + 1} ...", total=len(data_loader))
-        for data, targets in data_loader:
-            data, targets = data.to(device), targets.to(device)
-            if not args.kd:
-                # outputs = model.forward(data)
-                loss, outputs = loss_fn(data, targets)
-            else:
-                loss = loss_fn(data, targets)
-                outputs = None
-            # print(loss)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            acc = (outputs.argmax(dim=1) == targets).float().mean()
-            epoch_acc += acc.cpu().item() / len(data_loader)
-            epoch_loss += loss.cpu().item() / len(data_loader)
+    for data, targets in data_loader:
+        data, targets = data.to(device), targets.to(device)
+        if not args.kd:
+            # outputs = model.forward(data)
+            loss, outputs = loss_fn(data, targets)
+        else:
+            loss = loss_fn(data, targets)
+            outputs = None
+        # print(loss)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        acc = (outputs.argmax(dim=1) == targets).float().mean()
+        epoch_acc += acc.cpu().item() / len(data_loader)
+        epoch_loss += loss.cpu().item() / len(data_loader)
 
-            progress.update(task, advance=1)
     print(
         f"Epoch {epoch + 1}: train_loss : {epoch_loss:.4f} - train_acc: {epoch_acc:.4f}\n")
     return epoch_loss, epoch_acc
