@@ -1,19 +1,23 @@
+"""
+增加教师模型的降维和特征
+"""
 import torch.nn.functional as F
-import torch.nn as nn
+from torch import nn
 import timm
 
 # 一个batch的构成32个人一个人1张图
 
 
 class TeacherModel(nn.Module):
+    """
+    教师模型
+    """
     def __init__(self, model_name, num_classes=90, target_dim=128, pretrained=True):
         super().__init__()
         self.backbone = timm.create_model(
             model_name, num_classes=num_classes, pretrained=pretrained)
-
         self.original_fc = self.backbone.head.fc
         original_dim = self.original_fc.in_features
-
         self.backbone.head.fc = nn.Identity()
 
         self.dim_reduction = nn.Sequential(
@@ -21,21 +25,15 @@ class TeacherModel(nn.Module):
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Dropout(0.1),
-
             nn.Linear(256, target_dim),
             nn.BatchNorm1d(target_dim),
             nn.ReLU(inplace=True)
         )
 
-    # def get_embedding(self, data):
-        # embeddings = self.base_model.head.global_pool(
-        # self.base_model.forward_features(data)
-        # )
-        # return embeddings
-
-    # def get_outputs(self, embeddings):
-        # return self.base_model.head.fc(embeddings)
     def forward_embeddings(self, data):
+        """
+        输出embedding
+        """
         embeddings = self.backbone(data)
         # 降维，归一化
         reduced_embeddings = F.normalize(
@@ -43,11 +41,17 @@ class TeacherModel(nn.Module):
         return reduced_embeddings
 
     def forward(self, data):
+        """
+        输出logit
+        """
         embeddings = self.backbone(data)
         return self.original_fc(embeddings)
 
 
 def create_teacher_model(args):
+    """
+    创建教师模型
+    """
     ecg_model = TeacherModel(
         model_name=args.model,
         pretrained=True,

@@ -1,5 +1,5 @@
 """
-训练
+主训练
 """
 import argparse
 import logging
@@ -17,7 +17,7 @@ from models import *
 import matplotlib.pyplot as plt
 
 from dataset import build_dataset
-from teacher_model import create_teacher_model 
+from teacher_model import create_teacher_model
 from train_func import train_one_epoch, val_one_epoch
 # from timm.optim import create_optimizer
 
@@ -36,7 +36,7 @@ def get_args():
     parser.add_argument('--epochs', default=40, type=int)
 
     # 模型参数
-    parser.add_argument('--model', default='regnety_002', type=str)
+    parser.add_argument('--model', default='regnety_040', type=str)
     parser.add_argument('--input-size', default=224, type=int)
 
     # 优化器参数
@@ -46,7 +46,7 @@ def get_args():
     parser.add_argument('--lr', default=0.005, type=float)
     parser.add_argument('--step-size', default=10, type=int)
     parser.add_argument('--gamma', default=0.5, type=float)
-    
+
     # 是否开启蒸馏
     parser.add_argument('--kd', default=False, type=bool)
 
@@ -55,14 +55,16 @@ def get_args():
     #    -- train/
     #    -- val/
     #    -- test/
-    parser.add_argument('--data-path', default='ecg_id_img/', type=str)
-    parser.add_argument('--output-dir', default='', type=str)
+    parser.add_argument('--dataset', default='ecgid', type=str)
+    parser.add_argument('--data-path', default='data/', type=str)
+    parser.add_argument('--output-dir', default='runs', type=str)
     parser.add_argument('--device', default='cuda', type=str)
 
     return parser.parse_args()
 
 
-def main(args: argparse.Namespace):
+def main(args):
+    """主函数"""
     print(args)
     device = torch.device(args.device)
 
@@ -74,7 +76,7 @@ def main(args: argparse.Namespace):
         transforms.ToTensor(),
     ])
     dataset_val = datasets.ImageFolder(
-        root=args.data_path + 'val',
+        root=args.data_path + args.dataset + '/val',
         transform=data_transform
     )
 
@@ -98,23 +100,28 @@ def main(args: argparse.Namespace):
     print(f'Creating model: {args.model}')
     teacher_model = create_teacher_model(args=args)
     teacher_model.to(device)
-    scheduler = StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+
     # 损失函数
-    if args.kd:
+    if not args.kd:
         optimizer = optim.Adam(teacher_model.parameters(), args.lr)
         loss_fn = TripletLoss(model=teacher_model)
         model = teacher_model
     else:
         student_model = mobilenetv1().to(device)
         optimizer = optim.Adam(student_model.parameters(), args.lr)
-        loss_fn = KDLoss(student=('mobilenet_v1', student_model), teacher=('resnet50', teacher_model), ori_loss=nn.CrossEntropyLoss()) 
+        loss_fn = KDLoss(student=('mobilenet_v1', student_model), teacher=(
+            'resnet50', teacher_model), ori_loss=nn.CrossEntropyLoss())
         model = student_model
+
+    # 优化器
+    scheduler = StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
 
     print(f'Strat training for {args.epochs} epochs')
 
     t_loss_vec, t_acc_vec, v_loss_vec, v_acc_vec = [], [], [], []
 
     # 训练
+    min_loss = 100
     for epoch in range(args.epochs):
         t_loss, t_acc = train_one_epoch(
             model=model,
@@ -131,7 +138,11 @@ def main(args: argparse.Namespace):
             device=device,
             epoch=epoch,
         )
-
+        
+        if v_loss < min_loss:
+            min_loss = v_loss
+            print("save model")
+            torch.save(model.state_dict(), f"{args.output_dir}/{args.model}_{args.dataset}.pth")
         t_loss_vec.append(t_loss)
         t_acc_vec.append(t_acc)
         v_loss_vec.append(v_loss)
@@ -155,7 +166,6 @@ def main(args: argparse.Namespace):
     plt.legend()
     plt.grid(ls='--')
     plt.savefig(f'{args.output_dir}{args.model}_acc.png')
-    plt.show()
 
     # 损失函数图
     plt.figure()

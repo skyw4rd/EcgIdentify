@@ -13,6 +13,9 @@ from teacher_model import TeacherModel
 
 
 class TripletLoss(Loss):
+    """
+    三元损失类
+    """
     def __init__(self, model: TeacherModel):
         super().__init__()
         self.model = model
@@ -50,7 +53,7 @@ class TripletLoss(Loss):
         # 总损失 = 交叉熵 + 三元损失
         t_loss = self.triplet_loss(embeddings, positives, negatives)
         task_loss = self.cross_entropy_loss(outputs, targets)
-        return t_loss + task_loss
+        return t_loss + task_loss, outputs
 
 def get_mask(batch_shape: Tuple[int, int]):
     """

@@ -1,12 +1,37 @@
 """
 单次训练
 """
-import torch
+from typing import Iterable
 
-from typing import Iterable, Optional
+import torch
+from rich.progress import (
+    Progress,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+)
+
 from losses import *
 
-# from timm.utils import accuracy
+progress = Progress(
+    # [动态文本列] 显示 Epoch 信息，使用 {task.description} 占位
+    TextColumn("[bold white]{task.description}", justify="right"),
+
+    # [进度条列] 设定轨道为暗白(灰)，进度为纯白
+    BarColumn(
+        bar_width=40,
+        style="dim white",       # 轨道颜色
+        complete_style="white",  # 完成部分颜色
+        finished_style="white"   # 完成后的颜色
+    ),
+
+    # [百分比列] 强制白色
+    TaskProgressColumn(style="white"),
+
+    # [时间列] 自定义格式：只显示秒数，例如 "12.5s"
+    # 这里直接调用 task.elapsed 获取耗时
+    TextColumn("[white]{task.elapsed:.1f}s"),
+)
 
 
 def train_one_epoch(model: torch.nn.Module,
@@ -17,82 +42,45 @@ def train_one_epoch(model: torch.nn.Module,
                     epoch: int,
                     args=None
                     ):
+    """一个epoch训练"""
     model.train()
     # header = 'Epoch: [{}]'.format(epoch)
 
     epoch_loss = 0.0
     epoch_acc = 0.0
+    
+    with progress:
+        task = progress.add_task(f"Epoch {epoch + 1} ...", total=len(data_loader))
+        for data, targets in data_loader:
+            data, targets = data.to(device), targets.to(device)
+            if not args.kd:
+                # outputs = model.forward(data)
+                loss, outputs = loss_fn(data, targets)
+            else:
+                loss = loss_fn(data, targets)
+                outputs = None
+            # print(loss)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            acc = (outputs.argmax(dim=1) == targets).float().mean()
+            epoch_acc += acc.cpu().item() / len(data_loader)
+            epoch_loss += loss.cpu().item() / len(data_loader)
 
-    for data, targets in data_loader:
-        data, targets = data.to(device), targets.to(device)
-        embeddings = model.forward_embeddings(data)
-
-        # 中间特征层
-        # multi_features = model_features(data)
-        outputs = model.forward(data)
-        # outputs = ecg_model.get_outputs(embeddings)
-        # embeddings = embeddings.reshape(8, 4, 368)
-        # print(embeddings)
-        distance_matrix = torch.cdist(embeddings, embeddings, p=2)
-        # print(distance_matrix)
-
-        # 生成掩码
-        positive_mask, negative_mask = get_mask((embeddings.shape[0] // 4, 4))
-        # print(positive_mask)
-        # print(negative_mask)
-        # 正样本与锚点的距离掩码
-        pos_masked_matrix = distance_matrix.clone()
-        pos_masked_matrix[positive_mask] = float('-inf')
-
-        # 负样本与锚点的距离掩码
-        neg_masked_matrix = distance_matrix.clone()
-        neg_masked_matrix[negative_mask] = float('inf')
-
-        # 32个锚点的对应的正样本
-        _, hardest_positive_idxs = torch.max(pos_masked_matrix, dim=1)
-        # print(hardest_positive_idxs)
-        positives = embeddings[hardest_positive_idxs]
-
-        # 32个锚点对应的负样本
-        _, hardest_negative_idxs = torch.min(neg_masked_matrix, dim=1)
-        # print(hardest_negative_idxs)
-        negatives = embeddings[hardest_negative_idxs]
-
-        if not args.kd:
-            output = model(data)
-            loss = loss_fn(output, targets)
-        else:
-            # 总损失 = 交叉熵 + 三元损失
-            loss = loss_fn(embeddings, positives, negatives, outputs, targets)
-        # print(loss)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        # preds = outputs.argmax(dim=1)
-        # error_mask = (preds != label)
-        # error_indices = torch.nonzero(error_mask).squeeze()
-        # # 提取错误样本的真实标签和预测标签
-        # error_true_labels = label[error_mask]
-        # error_pred_labels = preds[error_mask]
-        # for idx, true, pred in zip(error_indices, error_true_labels, error_pred_labels):
-        # data_set.priority_class_counters[true.item()][pred.item()] += 1
-        acc = (outputs.argmax(dim=1) == targets).float().mean()
-        epoch_acc += acc.cpu().item() / len(data_loader)
-        epoch_loss += loss.cpu().item() / len(data_loader)
-
+            progress.update(task, advance=1)
     print(
         f"Epoch {epoch + 1}: train_loss : {epoch_loss:.4f} - train_acc: {epoch_acc:.4f}\n")
-
     return epoch_loss, epoch_acc
 
 
 def val_one_epoch(data_loader, model, device, epoch):
+    """验证一个epoch"""
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
 
     epoch_acc = 0.0
     epoch_loss = 0.0
+
     for data, targets in data_loader:
         data, targets = data.to(device), targets.to(device)
         outputs = model.forward(data)
