@@ -11,6 +11,7 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision import transforms
+import timm
 
 from losses import *
 from models import *
@@ -32,18 +33,21 @@ def get_args():
     parser = argparse.ArgumentParser(
         'teacher model ecg training script', add_help=False)
     parser.add_argument('--batch-size', default=32, type=int)
-    parser.add_argument('--batch-classes_num', default=8, type=int)
-    parser.add_argument('--epochs', default=40, type=int)
+    parser.add_argument('--batch-classes-num', default=8, type=int)
+    parser.add_argument('--epochs', default=20, type=int)
 
     # 模型参数
-    parser.add_argument('--model', default='regnety_040', type=str)
+    parser.add_argument('--model', default='resnet50.a1_ink', type=str)
     parser.add_argument('--input-size', default=224, type=int)
+    parser.add_argument('--teacher-model', default='resnet50.a1_in1k', type=str)
+    parser.add_argument('--student-model',
+                        default='mobilenetv3_small_100.lamb_in1k', type=str)
 
     # 优化器参数
     parser.add_argument('--opt', default='adamw', type=str)
 
     # 学习率参数
-    parser.add_argument('--lr', default=0.005, type=float)
+    parser.add_argument('--lr', default=0.001, type=float)
     parser.add_argument('--step-size', default=10, type=int)
     parser.add_argument('--gamma', default=0.5, type=float)
 
@@ -55,7 +59,7 @@ def get_args():
     #    -- train/
     #    -- val/
     #    -- test/
-    parser.add_argument('--dataset', default='ecgid', type=str)
+    parser.add_argument('--dataset', default='ptb', type=str)
     parser.add_argument('--data-path', default='data/', type=str)
     parser.add_argument('--output-dir', default='runs', type=str)
     parser.add_argument('--device', default='cuda', type=str)
@@ -68,13 +72,21 @@ def main(args):
     print(args)
     device = torch.device(args.device)
 
-    # build dataloader
-    dataset_train, args.nb_classes = build_dataset(args=args)
-
     data_transform = transforms.Compose([
         transforms.Resize([args.input_size, args.input_size]),
         transforms.ToTensor(),
     ])
+
+    # build dataloader
+    if not args.kd:
+        dataset_train, args.nb_classes = build_dataset(args=args)
+    else:
+        dataset_train = datasets.ImageFolder(
+            root=args.data_path + args.dataset + '/train',
+            transform=data_transform
+        )
+        args.nb_classes = 294
+
     dataset_val = datasets.ImageFolder(
         root=args.data_path + args.dataset + '/val',
         transform=data_transform
@@ -98,8 +110,7 @@ def main(args):
 
     # 创建模型
     print(f'Creating model: {args.model}')
-    teacher_model = create_teacher_model(args=args)
-    teacher_model.to(device)
+    teacher_model = create_teacher_model(args=args).to(device)
 
     # 损失函数
     if not args.kd:
@@ -107,10 +118,12 @@ def main(args):
         loss_fn = TripletLoss(model=teacher_model)
         model = teacher_model
     else:
-        student_model = mobilenetv1().to(device)
+        teacher_model.load_state_dict(torch.load(
+            'models_para/resnet34.a1_in1k_ecgid.pth'))
+        student_model = timm.create_model(args.student_model, pretrained=True, num_classes=90).to(device)
         optimizer = optim.Adam(student_model.parameters(), args.lr)
-        loss_fn = KDLoss(student=('mobilenet_v1', student_model), teacher=(
-            'resnet50', teacher_model), ori_loss=nn.CrossEntropyLoss())
+        loss_fn = KDLoss(student=(args.student_model, student_model), teacher=(
+            args.teacher_model, teacher_model), base_criterion=nn.CrossEntropyLoss())
         model = student_model
 
     # 优化器
@@ -138,18 +151,20 @@ def main(args):
             device=device,
             epoch=epoch,
         )
-        
+
         if v_loss < min_loss:
             min_loss = v_loss
             print("save model")
-            torch.save(model.state_dict(), f"{args.output_dir}/{args.model}_{args.dataset}.pth")
+            torch.save(model.state_dict(),
+                       f"models_para/{args.model}_{args.dataset}.pth")
         t_loss_vec.append(t_loss)
         t_acc_vec.append(t_acc)
         v_loss_vec.append(v_loss)
         v_acc_vec.append(v_acc)
 
         # 更新Dataset
-        dataset_train.set_samples()
+        if not args.kd:
+            dataset_train.set_samples()
         # 更新学习率
         scheduler.step()
 
@@ -165,7 +180,7 @@ def main(args):
     plt.title(f'{args.model} acc')
     plt.legend()
     plt.grid(ls='--')
-    plt.savefig(f'{args.output_dir}{args.model}_acc.png')
+    plt.savefig(f'{args.output_dir}/{args.model}_acc.png')
 
     # 损失函数图
     plt.figure()
@@ -178,7 +193,7 @@ def main(args):
     plt.title(f'{args.model} loss')
     plt.legend()
     plt.grid(ls='--')
-    plt.savefig(f'{args.output_dir}{args.model}_loss.png')
+    plt.savefig(f'{args.output_dir}/{args.model}_loss.png')
 
 
 if __name__ == '__main__':

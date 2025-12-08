@@ -26,7 +26,7 @@ class TripletLoss(Loss):
     def __call__(self, x, targets):
         # 特征向量，概率分布输出
         embeddings = self.model.forward_embeddings(x)
-        outputs = self.model.forward(x)
+        logits = self.model.forward(x)
 
         # 相似度矩阵
         distance_matrix = torch.cdist(embeddings, embeddings, p=2)
@@ -52,8 +52,8 @@ class TripletLoss(Loss):
 
         # 总损失 = 交叉熵 + 三元损失
         t_loss = self.triplet_loss(embeddings, positives, negatives)
-        task_loss = self.cross_entropy_loss(outputs, targets)
-        return t_loss + task_loss, outputs
+        task_loss = self.cross_entropy_loss(logits, targets)
+        return t_loss + task_loss, logits 
 
 def get_mask(batch_shape: Tuple[int, int]):
     """

@@ -16,9 +16,9 @@ class TeacherModel(nn.Module):
         super().__init__()
         self.backbone = timm.create_model(
             model_name, num_classes=num_classes, pretrained=pretrained)
-        self.original_fc = self.backbone.head.fc
+        self.original_fc = self.backbone.fc
         original_dim = self.original_fc.in_features
-        self.backbone.head.fc = nn.Identity()
+        self.backbone.fc = nn.Identity()
 
         self.dim_reduction = nn.Sequential(
             nn.Linear(original_dim, 256),
@@ -53,7 +53,7 @@ def create_teacher_model(args):
     创建教师模型
     """
     ecg_model = TeacherModel(
-        model_name=args.model,
+        model_name=args.teacher_model,
         pretrained=True,
         num_classes=args.nb_classes
     )

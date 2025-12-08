@@ -51,17 +51,17 @@ def train_one_epoch(model: torch.nn.Module,
     
     for data, targets in data_loader:
         data, targets = data.to(device), targets.to(device)
-        if not args.kd:
-            # outputs = model.forward(data)
-            loss, outputs = loss_fn(data, targets)
-        else:
-            loss = loss_fn(data, targets)
-            outputs = None
+        x = data.shape[0]
+        if x != 32:
+            print(targets)
+            break
+        continue
+        loss, logits = loss_fn(data, targets)
         # print(loss)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        acc = (outputs.argmax(dim=1) == targets).float().mean()
+        acc = (logits.argmax(dim=1) == targets).float().mean()
         epoch_acc += acc.cpu().item() / len(data_loader)
         epoch_loss += loss.cpu().item() / len(data_loader)
 

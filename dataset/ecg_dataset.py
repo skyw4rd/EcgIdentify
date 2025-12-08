@@ -66,7 +66,7 @@ class EcgImage(data.Dataset):
             if len(tmp_dict.keys()) >= self.batch_classes_num:
                 choose_classes = random.sample(
                     list(tmp_dict.keys()), self.batch_classes_num)
-            elif len(tmp_dict.keys()) > 0:
+            elif len(tmp_dict.keys()) > 0 and len(tmp_dict.keys()) < self.batch_classes_num:
                 choose_classes = list(tmp_dict.keys())
             else:
                 break
@@ -149,6 +149,19 @@ class EcgImage(data.Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
+def test_build_dataset():
+    batch_classes_num, batch_img_num = 8, 4
+    data_transform = transforms.Compose([
+        transforms.Resize([224, 224]),
+        transforms.ToTensor(),
+    ])
+
+    dataset = EcgImage(
+        root='F:\\ecg\\EcgIdentify\\data\\ptb\\train',
+        transform=data_transform,
+        triplet_batch=(batch_classes_num, batch_img_num))
+
+    return dataset, dataset.get_nb_classes()
 
 def build_dataset(args):
     batch_classes_num, batch_img_num = args.batch_classes_num, args.batch_size // args.batch_classes_num
