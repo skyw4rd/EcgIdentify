@@ -13,7 +13,7 @@ from torchvision import datasets
 from torchvision import transforms
 import timm
 
-from losses import *
+from losses import TripletLoss, KDLoss
 from models import *
 import matplotlib.pyplot as plt
 
@@ -37,7 +37,6 @@ def get_args():
     parser.add_argument('--epochs', default=20, type=int)
 
     # 模型参数
-    parser.add_argument('--model', default='resnet50.a1_ink', type=str)
     parser.add_argument('--input-size', default=224, type=int)
     parser.add_argument('--teacher-model', default='resnet50.a1_in1k', type=str)
     parser.add_argument('--student-model',
@@ -108,8 +107,8 @@ def main(args):
         pin_memory=False
     )
 
-    # 创建模型
-    print(f'Creating model: {args.model}')
+    # 创建教师模型
+    print(f'Creating teacher model: {args.teacher_model}')
     teacher_model = create_teacher_model(args=args).to(device)
 
     # 损失函数
