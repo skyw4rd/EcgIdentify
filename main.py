@@ -13,8 +13,8 @@ from torchvision import datasets
 from torchvision import transforms
 import timm
 
-from losses import TripletLoss, KDLoss
-from models import *
+from losses import TripletLoss 
+from losses.kd_loss_new import KDLoss
 import matplotlib.pyplot as plt
 
 from dataset import build_dataset
@@ -38,15 +38,16 @@ def get_args():
 
     # 模型参数
     parser.add_argument('--input-size', default=224, type=int)
-    parser.add_argument('--teacher-model', default='resnet50.a1_in1k', type=str)
+    parser.add_argument('--teacher-model', default='resnet34.a1_in1k', type=str)
     parser.add_argument('--student-model',
-                        default='mobilenetv3_small_100.lamb_in1k', type=str)
+                        default='deit_small_patch16_224', type=str)
 
+    # mobilenetv3_small_100.lamb_in1k
     # 优化器参数
     parser.add_argument('--opt', default='adamw', type=str)
 
     # 学习率参数
-    parser.add_argument('--lr', default=0.001, type=float)
+    parser.add_argument('--lr', default=0.0005, type=float)
     parser.add_argument('--step-size', default=10, type=int)
     parser.add_argument('--gamma', default=0.5, type=float)
 
@@ -69,7 +70,9 @@ def get_args():
 def main(args):
     """主函数"""
     print(args)
+
     device = torch.device(args.device)
+    model_name = args.teacher_model if not args.kd else args.student_model
 
     data_transform = transforms.Compose([
         transforms.Resize([args.input_size, args.input_size]),
@@ -84,7 +87,7 @@ def main(args):
             root=args.data_path + args.dataset + '/train',
             transform=data_transform
         )
-        args.nb_classes = 294
+        args.nb_classes = 289
 
     dataset_val = datasets.ImageFolder(
         root=args.data_path + args.dataset + '/val',
@@ -94,7 +97,7 @@ def main(args):
     dataloader_train = DataLoader(
         dataset_train,
         batch_size=args.batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=4,
         pin_memory=False
     )
@@ -102,13 +105,13 @@ def main(args):
     dataloader_val = DataLoader(
         dataset_val,
         batch_size=args.batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=4,
         pin_memory=False
     )
 
     # 创建教师模型
-    print(f'Creating teacher model: {args.teacher_model}')
+    print(f'Creating teacher model: {args.teacher_model}, Dataset: {args.dataset}')
     teacher_model = create_teacher_model(args=args).to(device)
 
     # 损失函数
@@ -118,8 +121,8 @@ def main(args):
         model = teacher_model
     else:
         teacher_model.load_state_dict(torch.load(
-            'models_para/resnet34.a1_in1k_ecgid.pth'))
-        student_model = timm.create_model(args.student_model, pretrained=True, num_classes=90).to(device)
+            'models_para/resnet34.a1_in1k_ptb.pth'))
+        student_model = timm.create_model(args.student_model, pretrained=True, num_classes=args.nb_classes).to(device)
         optimizer = optim.Adam(student_model.parameters(), args.lr)
         loss_fn = KDLoss(student=(args.student_model, student_model), teacher=(
             args.teacher_model, teacher_model), base_criterion=nn.CrossEntropyLoss())
@@ -150,12 +153,15 @@ def main(args):
             device=device,
             epoch=epoch,
         )
-
+        
+        # 保存最优模型
         if v_loss < min_loss:
             min_loss = v_loss
             print("save model")
             torch.save(model.state_dict(),
-                       f"models_para/{args.model}_{args.dataset}.pth")
+                       f"models_para/{model_name}_{args.dataset}.pth")
+
+        # 保存loss acc
         t_loss_vec.append(t_loss)
         t_acc_vec.append(t_acc)
         v_loss_vec.append(v_loss)
@@ -166,6 +172,8 @@ def main(args):
             dataset_train.set_samples()
         # 更新学习率
         scheduler.step()
+    
+        
 
     # 画图
     xr = args.epochs
@@ -176,10 +184,10 @@ def main(args):
     plt.ylabel('acc')
     plt.xticks()
     plt.yticks()
-    plt.title(f'{args.model} acc')
+    plt.title(f'{model_name} acc')
     plt.legend()
     plt.grid(ls='--')
-    plt.savefig(f'{args.output_dir}/{args.model}_acc.png')
+    plt.savefig(f'{args.output_dir}/{model_name}_{args.dataset}_acc.png')
 
     # 损失函数图
     plt.figure()
@@ -189,10 +197,10 @@ def main(args):
     plt.ylabel('loss')
     plt.xticks()
     plt.yticks()
-    plt.title(f'{args.model} loss')
+    plt.title(f'{model_name} loss')
     plt.legend()
     plt.grid(ls='--')
-    plt.savefig(f'{args.output_dir}/{args.model}_loss.png')
+    plt.savefig(f'{args.output_dir}/{model_name}_{args.dataset}_loss.png')
 
 
 if __name__ == '__main__':

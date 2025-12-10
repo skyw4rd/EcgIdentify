@@ -16,11 +16,8 @@ logger = logging.getLogger()
 
 
 KD_POINTS = {
-    "resnet50": dict(kd_points=["layer4", "fc"], channels=[2048, 1000]),
-    # 'resnet34': dict(kd_points=['layer4', 'fc'])
-    "mobilenet_v1": dict(kd_points=["model.13", "classifier"], channels=[1024, 1000]),
-    "regnety_040": dict(kd_points=["backbone.final_conv"], channels=[1088]),
-    "deit": dict(kd_points=[""], channels=[]),
+    'resnet34.a1_in1k': dict(kd_points=['backbone.layer4'], channels=[512]),
+    'mobilenetv3_small_100.lamb_in1k': dict(kd_points=['blocks'], channels=[576]),
 }
 
 __all__ = ["KDLoss"]
@@ -51,63 +48,66 @@ class KDLoss(Loss):
         self.feat_loss_w = feat_loss_w
 
         # kd_method = mse
-        # stu_kd_points = KD_POINTS[self.stu_name]['kd_points'][:1]
-        # tea_kd_points = KD_POINTS[self.tea_name]['kd_points'][:1]
-        # stu_channels = KD_POINTS[self.stu_name]['channels'][:1]
-        # tea_channels = KD_POINTS[self.tea_name]['channels'][:1]
+        stu_kd_points = KD_POINTS[self.stu_name]['kd_points'][:1]
+        tea_kd_points = KD_POINTS[self.tea_name]['kd_points'][:1]
+        stu_channels = KD_POINTS[self.stu_name]['channels'][:1]
+        tea_channels = KD_POINTS[self.tea_name]['channels'][:1]
 
-        # self.kd_loss = nn.MSELoss()
+        self.kd_loss = nn.MSELoss()
 
-        # self.align = nn.Conv2d(stu_channels[0], tea_channels[0], 1)
-        # self.align.cuda()
-        # self.stu_model._align = self.align
+        self.align = nn.Conv2d(stu_channels[0], tea_channels[0], 1)
+        self.align.cuda()
+        self.stu_model._align = self.align
 
         self._tea_out = {}
         self._stu_out = {}
 
         # register hook in tea and stu model
-        # for stu_point, tea_point in zip(stu_kd_points, tea_kd_points):
-        # self._register_forward_hook(
-        # self.stu_model, stu_point, is_tea=False)
-        # self._register_forward_hook(self.tea_model, tea_point, is_tea=True)
+        for stu_point, tea_point in zip(stu_kd_points, tea_kd_points):
+            self._register_forward_hook(
+            self.stu_model, stu_point, is_tea=False)
+            self._register_forward_hook(self.tea_model, tea_point, is_tea=True)
 
-        # self.stu_kd_points = stu_kd_points
-        # self.tea_kd_points = tea_kd_points
+            self.stu_kd_points = stu_kd_points
+            self.tea_kd_points = tea_kd_points
 
-        self.tea_model.eval()
-        self._iter = 0
+            self.tea_model.eval()
+            self._iter = 0
 
     def __call__(self, x, targets):
         self._stu_out = {}
         self._tea_out = {}
 
         # with torch.no_grad():
-        # t_logits = self.tea_model.forward(x)
+        t_logits = self.tea_model.forward(x)
 
         s_logits = self.stu_model(x)
 
-        # T = 6.0
+
+        T = 5.0
+
+        # print(F.softmax(t_logits / T, dim=1))
 
         cls_loss = self.base_criterion(s_logits, targets)
 
-        # feat_loss = 0
-        # for sp, tp in zip(self.stu_kd_points, self.tea_kd_points):
-        # if hasattr(self, 'align'):
-        # self._stu_out[sp] = self.align(self._stu_out[sp])
+        feat_loss = 0
+        for sp, tp in zip(self.stu_kd_points, self.tea_kd_points):
+            if hasattr(self, 'align'):
+                self._stu_out[sp] = self.align(self._stu_out[sp])
 
-        # stu_feature = standardize_features(self._stu_out[sp])
-        # tea_feature = standardize_features(self._tea_out[tp])
+            stu_feature = standardize_features(self._stu_out[sp])
+            tea_feature = standardize_features(self._tea_out[tp])
 
-        # feat_loss_ = self.kd_loss(stu_feature, tea_feature)
-        # feat_loss += feat_loss_
+            feat_loss_ = self.kd_loss(stu_feature, tea_feature)
+            feat_loss += feat_loss_
 
-        # kl_loss = F.kl_div(
-        # F.log_softmax(s_logits / T, dim=1),  # 学生
-        # F.softmax(t_logits / T, dim=1),  # 教师
-        # reduction='batchmean',
-        # ) * (T ** 2)
+        kl_loss = F.kl_div(
+        F.log_softmax(s_logits / T, dim=1),  # 学生
+        F.softmax(t_logits / T, dim=1),  # 教师
+        reduction='batchmean',
+        ) * (T ** 2)
 
-        return cls_loss, s_logits
+        return cls_loss + kl_loss + 0.2 * feat_loss, s_logits
 
     def _register_forward_hook(self, model: nn.Module, point_name: str, is_tea=False):
         # register_points = []

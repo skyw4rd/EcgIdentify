@@ -1,6 +1,7 @@
 """
 增加教师模型的降维和特征
 """
+from ast import mod
 import torch.nn.functional as F
 from torch import nn
 import timm
@@ -47,6 +48,15 @@ class TeacherModel(nn.Module):
         embeddings = self.backbone(data)
         return self.original_fc(embeddings)
 
+
+def create_test_teacher_model(model_name, nb_classes):
+    ecg_model = TeacherModel(
+        model_name=model_name,
+        pretrained=True,
+        num_classes=nb_classes
+    )
+
+    return ecg_model
 
 def create_teacher_model(args):
     """
