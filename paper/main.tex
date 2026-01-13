@@ -1,0 +1,59 @@
+\documentclass[journal]{IEEEtran}
+
+% --- 宏包加载 ---
+\usepackage{ctex}                % 中文支持
+\usepackage{amsmath, amssymb, amsfonts}    % 数学公式
+\usepackage{algorithmic}
+\usepackage{array}
+\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+\usepackage{textcomp}
+\usepackage{stfloats}
+\usepackage{url}
+\usepackage{verbatim}
+\usepackage{graphicx}            % 插入图片
+\usepackage{booktabs}            % 精美表格
+\usepackage{tikz}
+\usetikzlibrary{positioning,fit,calc,arrows.meta}
+
+% --- 文档信息 ---
+\title{Efficient ECG Identification via Hierarchical Knowledge Distillation}
+\author{xxx,~\IEEEmembership{Student Member,~IEEE}
+\thanks{}}
+
+\markboth{Journal of \LaTeX\ Class Files,~Vol.~14, No.~8, August~2015}%
+{Shell \MakeLowercase{\textit{et al.}}: Bare Demo of IEEEtran.cls for Journals}
+
+\raggedbottom
+\begin{document}
+
+\maketitle
+
+\begin{IEEEkeywords}
+\end{IEEEkeywords}
+
+\section{Introduction}
+Ensuring the security of personal property and privacy in an increasingly digitized world is a challenge of utmost importance. Society has become heavily dependent on robust identity verification systems for daily activities, ranging from financial transactions to the unlocking of smart wearable devices. Traditional alphanumeric passwords, once the standard, have become increasingly inadequate due to their vulnerability to leakage and the cognitive burden they place on users. Consequently, biometric authentication has emerged as the mainstream solution, leveraging inherent physiological traits to ascertain individual identities with high degrees of accuracy and permanence.
+
+Among various biometric modalities, Electrocardiogram (ECG) signals have gained significant research attention. Unlike external features such as facial patterns or fingerprints, ECG signals capture distinct internal physiological dynamics that are naturally resistant to physical-world adversarial attacks and spoofing. Furthermore, ECG signals inherently provide "liveness detection," ensuring that the captured data originates from a living individual. However, the practical deployment of ECG-based authentication in real-world scenarios—particularly on resource-constrained edge devices like smartwatches—is currently bottlenecked by the inherent conflict between recognition precision and computational efficiency.
+
+ECG-based biometric recognition is a complex task requiring the extraction of fine-grained features from noisy physiological signals. Recent advances in deep learning have enabled models to produce accurate identifications; however, these developments have largely been focused on heavy-scale deterministic modeling. While these high-capacity architectures achieve impressive accuracy, their computational cost is massive, often limiting their applicability in mobile scenarios. To address this, Machine-Learning-based Model Compression (e.g., Knowledge Distillation) is a promising approach. However, existing ECG authentication research still falls short of practical requirements. Current methods either rely on computationally expensive preprocessing and segmentation or necessitate repetitive model retraining to maintain accuracy for enrolled users, which is prohibitively slow for real-time systems. Furthermore, traditional distillation frameworks predominantly focus on logit-level transfer, which fails to accurately represent the complex distribution of ECG features when distilling knowledge across heterogeneous architectures (e.g., from CNNs to Transformers).
+
+To circumvent these limitations, we propose a Triplet-enhanced Hierarchical Knowledge Distillation (THKD) framework. Our method enables efficient high-precision identification by bridging the semantic gap between a heavy teacher and a lightweight student. By combining a triplet-variable formulation within a hierarchical Graph-like alignment (or Transformer-based) architecture, the distribution of individual ECG traits is modeled in a more discriminative space. Specifically, we utilize a ResNet-34 teacher enhanced by triplet loss to capture robust inter-class differences, which are then transferred to a DeiT-tiny student via a multi-dimensional hierarchical loss.
+
+\textbf{Our main contributions are:} 1) A Discriminative Supervision Framework: We develop a triplet-enhanced teacher network that provides more robust "soft knowledge" by explicitly guiding the model to learn fine-grained individual variations. 2) Hierarchical Knowledge Distillation: We define the THKD strategy capable of bridging the structural heterogeneity between CNN and Transformer architectures through multi-level feature alignment. 3) Efficiency-Accuracy Optimization: We develop a training method targeting both recognition quality and model calibration, ensuring the student model maintains high performance with significantly reduced parameters. 4) Extensive Empirical Validation: We experiment with both global public datasets (ECG-ID, PTB) and a novel private laboratory dataset at high resolution, demonstrating a superior balance between accuracy and inference latency.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=2\columnwidth]{img/THKD.png}
+    \caption{THKD}
+\end{figure}
+
+\section{Related Work}
+
+\section{Method}
+
+\section{Experiment}
+
+\section{Conclusion}
+
+\end{document}

@@ -40,7 +40,7 @@ def get_args():
     parser.add_argument('--input-size', default=224, type=int)
     parser.add_argument('--teacher-model', default='resnet34.a1_in1k', type=str)
     parser.add_argument('--student-model',
-                        default='deit_small_patch16_224', type=str)
+                        default='deit_tiny_patch16_224', type=str)
 
     # mobilenetv3_small_100.lamb_in1k
     # 优化器参数
@@ -128,10 +128,21 @@ def main(args):
             args.teacher_model, teacher_model), base_criterion=nn.CrossEntropyLoss())
         model = student_model
 
+    # 计算FLOPs
+    from thop import profile
+    dummy_input = torch.randn(1, 3, args.input_size, args.input_size).to(device)
+    teacher_flops, teacher_params = profile(teacher_model, inputs=(dummy_input,))
+    student_flops, student_params = profile(model, inputs=(dummy_input,))
+    print(f"Teacher FLOPs: {teacher_flops/1e9:.2f} GFLOPs, Teacher PARAMS: {teacher_params/1e6:.2f} M")
+    print(f"Student FLOPs: {student_flops/1e9:.2f} GFLOPs, Student PARAMS: {student_params/1e6:.2f} M")
+
     # 优化器
     scheduler = StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
 
     print(f'Strat training for {args.epochs} epochs')
+
+    import time
+    start_time = time.time()
 
     t_loss_vec, t_acc_vec, v_loss_vec, v_acc_vec = [], [], [], []
 
@@ -172,6 +183,9 @@ def main(args):
             dataset_train.set_samples()
         # 更新学习率
         scheduler.step()
+    
+    end_time = time.time()
+    print(f"Training finished in {end_time - start_time:.2f}s")
     
         
 

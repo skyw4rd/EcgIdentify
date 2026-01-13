@@ -18,14 +18,15 @@ logger = logging.getLogger()
 
 KD_POINTS = {
     'resnet34.a1_in1k': dict(kd_points=['backbone.layer4'], channels=[512], feature_map_size=(7, 7)),
-    'mobilenetv3_small_100.lamb_in1k': dict(kd_points=['blocks'], channels=[576], feature_map_size=None),
-    'deit_small_patch16_224': dict(kd_points=['blocks.11'], channels=[384], feature_map_size=None)
+    'mobilenetv3_small_100.lamb_in1k': dict(kd_points=['blocks'], channels=[576], feature_map_size=(7, 7)),
+    'deit_tiny_patch16_224': dict(kd_points=['blocks.11'], channels=[192], feature_map_size=None)
 }
 
 __all__ = ["KDLoss"]
 
 
 def standardize_features(tensor, eps=1e-8):
+    """标准化特征"""
     # This works for both 4D CNN features and 4D reshaped ViT features
     mean = torch.mean(tensor, dim=[1, 2, 3], keepdim=True)
     std = torch.std(tensor, dim=[1, 2, 3], keepdim=True)
@@ -46,12 +47,12 @@ class KDLoss(Loss):
         self.tea_name, self.tea_model = teacher[0], teacher[1]
 
         self.base_criterion = base_criterion
-
+        
+        # 损失权重
         self.cls_loss_w = cls_loss_w
         self.kl_loss_w = 1 - cls_loss_w
         self.feat_loss_w = feat_loss_w
 
-        # kd_method = mse
         stu_kd_points = KD_POINTS[self.stu_name]['kd_points'][:1]
         tea_kd_points = KD_POINTS[self.tea_name]['kd_points'][:1]
         stu_channels = KD_POINTS[self.stu_name]['channels'][:1]
@@ -59,9 +60,11 @@ class KDLoss(Loss):
         
         self.is_vit_student = 'deit' in self.stu_name
 
+        # kd_method = mse
         self.kd_loss = nn.MSELoss()
 
         # Create alignment layer based on student model type
+        # 对齐方式
         if self.is_vit_student:
             # For ViT, we align the feature dimension
             self.align = nn.Linear(stu_channels[0], tea_channels[0])
@@ -92,7 +95,7 @@ class KDLoss(Loss):
             self.tea_kd_points = tea_kd_points
 
             self.tea_model.eval()
-            self._iter = 0
+            # self._iter = 0
 
     def __call__(self, x, targets):
         self._stu_out = {}
@@ -100,9 +103,7 @@ class KDLoss(Loss):
 
         # with torch.no_grad():
         t_logits = self.tea_model.forward(x)
-
-        s_logits = self.stu_model(x)
-
+        s_logits = self.stu_model.forward(x)
 
         T = 5.0
 
@@ -150,7 +151,8 @@ class KDLoss(Loss):
 
             feat_loss_ = self.kd_loss(stu_feature, tea_feature)
             feat_loss += feat_loss_
-
+        
+        # 计算kl散度
         kl_loss = F.kl_div(
             F.log_softmax(s_logits / T, dim=1),  # 学生
             F.softmax(t_logits / T, dim=1),  # 教师

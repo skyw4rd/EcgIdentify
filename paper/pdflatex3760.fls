@@ -1,0 +1,5 @@
+PWD f:/ecg/EcgIdentify/paper
+INPUT d:/tex/texlive/2025/texmf.cnf
+INPUT d:/tex/texlive/2025/texmf-dist/web2c/texmf.cnf
+INPUT d:/tex/texlive/2025/texmf-var/web2c/pdftex/pdflatex.fmt
+INPUT f:/ecg/EcgIdentify/paper/main.tex

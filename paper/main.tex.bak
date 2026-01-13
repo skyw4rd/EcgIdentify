@@ -1,0 +1,65 @@
+\documentclass[12pt, a4paper]{article}
+
+% --- 宏包加载 ---
+\usepackage[utf8]{inputenc}      % 字符编码
+\usepackage{ctex}                % 中文支持
+\usepackage{amsmath, amssymb}    % 数学公式
+\usepackage{graphicx}            % 插入图片
+\usepackage{booktabs}            % 精美表格
+\usepackage{geometry}            % 页面边距
+\geometry{left=2.5cm, right=2.5cm, top=3cm, bottom=3cm}
+
+% --- 文档信息 ---
+\title{深度学习中的知识蒸馏研究综述}
+\author{杨傲伟 \\ \small 计算机科学与技术系}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本文主要探讨了知识蒸馏（Knowledge Distillation）的基本原理及其在模型压缩中的应用。通过教师模型指导学生模型的训练，可以有效提升轻量化网络的性能。
+\end{abstract}
+
+\section{引言}
+随着深度学习的发展，模型参数量日益庞大。如何在保证精度的前提下减小模型体积，成为了当前的研究热点。
+
+\section{数学基础}
+在知识蒸馏中，我们通常使用具有温度系数（Temperature）的 Softmax 函数。设 $z_i$ 为模型输出的 Logit，则带温度的输出概率 $q_i$ 计算如下：
+
+\begin{equation}
+q_i = \frac{\exp(z_i / T)}{\sum_{j} \exp(z_j / T)}
+\end{equation}
+
+其中，$T$ 是一个超参数。当 $T=1$ 时，它退化为标准的 Softmax。
+
+\section{实验配置}
+在实验过程中，我们关注以下几个要点：
+\begin{itemize}
+    \item \textbf{数据集}：使用 CIFAR-100 进行测试。
+    \item \textbf{骨干网络}：教师模型为 ResNet-50，学生模型为 MobileNetV2。
+    \item \textbf{优化器}：采用 SGD，初始学习率为 $0.1$。
+\end{itemize}
+
+\section{实验结果}
+下表展示了不同蒸馏方法的效果对比：
+
+\begin{table}[h]
+\centering
+\caption{蒸馏效果对比测试}
+\begin{tabular}{lcc}
+\toprule
+方法 & 准确率 (\%) & 参数量 (M) \\
+\midrule
+Teacher (ResNet-50) & 76.5 & 25.6 \\
+Student (MobileNetV2) & 68.2 & 3.4 \\
+\textbf{Distillation (Ours)} & \textbf{72.8} & \textbf{3.4} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{结论}
+实验表明，合理的蒸馏策略能显著弥补小模型在表达能力上的不足。
+
+\end{document}
