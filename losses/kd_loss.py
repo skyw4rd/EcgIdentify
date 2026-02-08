@@ -16,7 +16,7 @@ logger = logging.getLogger()
 
 
 KD_POINTS = {
-    'resnet34.a1_in1k': dict(kd_points=['backbone.layer4'], channels=[512]),
+    'resnet34.a1_in1k': dict(kd_points=['layer4'], channels=[512]),
     'mobilenetv3_small_100.lamb_in1k': dict(kd_points=['blocks'], channels=[576]),
 }
 

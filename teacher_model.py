@@ -8,7 +8,6 @@ import timm
 
 # 一个batch的构成32个人一个人1张图
 
-
 class TeacherModel(nn.Module):
     """
     教师模型

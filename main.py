@@ -1,24 +1,24 @@
 """
 主训练
 """
-import argparse
 import logging
+import os
+import tomllib
 
 import torch
-from torch import nn
+from torch import logit, nn
 from torch import optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 from torchvision import datasets
+from torchvision import models as tv_models
 from torchvision import transforms
 import timm
 
 from losses import TripletLoss 
 from losses.kd_loss_new import KDLoss
-import matplotlib.pyplot as plt
 
 from dataset import build_dataset
-from teacher_model import create_teacher_model
 from train_func import train_one_epoch, val_one_epoch
 # from timm.optim import create_optimizer
 
@@ -28,43 +28,40 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def get_args():
-    # 超参数
-    parser = argparse.ArgumentParser(
-        'teacher model ecg training script', add_help=False)
-    parser.add_argument('--batch-size', default=32, type=int)
-    parser.add_argument('--batch-classes-num', default=8, type=int)
-    parser.add_argument('--epochs', default=20, type=int)
+def _flatten_config(config):
+    flat = {}
+    if not isinstance(config, dict):
+        return flat
+    for key, value in config.items():
+        if isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                if isinstance(sub_value, dict):
+                    for sub_key2, sub_value2 in sub_value.items():
+                        flat[sub_key2] = sub_value2
+                else:
+                    flat[sub_key] = sub_value
+        else:
+            flat[key] = value
+    return flat
 
-    # 模型参数
-    parser.add_argument('--input-size', default=224, type=int)
-    parser.add_argument('--teacher-model', default='resnet34.a1_in1k', type=str)
-    parser.add_argument('--student-model',
-                        default='deit_tiny_patch16_224', type=str)
 
-    # mobilenetv3_small_100.lamb_in1k
-    # 优化器参数
-    parser.add_argument('--opt', default='adamw', type=str)
+def load_config_toml(path):
+    if not path:
+        return {}
+    if not os.path.isfile(path):
+        return {}
+    with open(path, 'rb') as f:
+        data = tomllib.load(f)
+    return _flatten_config(data)
 
-    # 学习率参数
-    parser.add_argument('--lr', default=0.0005, type=float)
-    parser.add_argument('--step-size', default=10, type=int)
-    parser.add_argument('--gamma', default=0.5, type=float)
 
-    # 是否开启蒸馏
-    parser.add_argument('--kd', default=False, type=bool)
-
-    # 数据集参数
-    # -- dataset/
-    #    -- train/
-    #    -- val/
-    #    -- test/
-    parser.add_argument('--dataset', default='ptb', type=str)
-    parser.add_argument('--data-path', default='data/', type=str)
-    parser.add_argument('--output-dir', default='runs', type=str)
-    parser.add_argument('--device', default='cuda', type=str)
-
-    return parser.parse_args()
+def get_args(config_path='config.toml'):
+    # All hyperparameters come from TOML
+    config_defaults = load_config_toml(config_path)
+    if not config_defaults:
+        raise FileNotFoundError(f'Config not found or empty: {config_path}')
+    from types import SimpleNamespace
+    return SimpleNamespace(**config_defaults)
 
 
 def main(args):
@@ -72,7 +69,12 @@ def main(args):
     print(args)
 
     device = torch.device(args.device)
-    model_name = args.teacher_model if not args.kd else args.student_model
+    
+    if args.baseline:
+        model_name = args.baseline_model
+    if not args.baseline:
+        model_name = args.teacher_model if not args.kd else args.student_model
+
 
     data_transform = transforms.Compose([
         transforms.Resize([args.input_size, args.input_size]),
@@ -80,14 +82,13 @@ def main(args):
     ])
 
     # build dataloader
-    if not args.kd:
-        dataset_train, args.nb_classes = build_dataset(args=args)
+    if not args.kd and not args.baseline:
+        dataset_train = build_dataset(args=args)
     else:
         dataset_train = datasets.ImageFolder(
             root=args.data_path + args.dataset + '/train',
             transform=data_transform
         )
-        args.nb_classes = 289
 
     dataset_val = datasets.ImageFolder(
         root=args.data_path + args.dataset + '/val',
@@ -97,7 +98,7 @@ def main(args):
     dataloader_train = DataLoader(
         dataset_train,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=False if not args.kd and not args.baseline else True,
         num_workers=4,
         pin_memory=False
     )
@@ -112,35 +113,68 @@ def main(args):
 
     # 创建教师模型
     print(f'Creating teacher model: {args.teacher_model}, Dataset: {args.dataset}')
-    teacher_model = create_teacher_model(args=args).to(device)
-
+    
     # 损失函数
-    if not args.kd:
-        optimizer = optim.Adam(teacher_model.parameters(), args.lr)
-        loss_fn = TripletLoss(model=teacher_model)
+    if args.baseline:
+        if args.baseline_model.startswith("squeezenet"):
+            if args.baseline_model == "squeezenet1_1":
+                model = tv_models.squeezenet1_1(pretrained=True)
+            elif args.baseline_model == "squeezenet1_0":
+                model = tv_models.squeezenet1_0(pretrained=True)
+            else:
+                raise ValueError(f"Unsupported SqueezeNet variant: {args.baseline_model}")
+            model.classifier[1] = nn.Conv2d(512, args.nb_classes, kernel_size=1)
+            model.num_classes = args.nb_classes
+            model = model.to(device)
+        elif args.baseline_model.startswith("shufflenet_v2_"):
+            if args.baseline_model == "shufflenet_v2_x1_0":
+                model = tv_models.shufflenet_v2_x1_0(pretrained=True)
+            elif args.baseline_model == "shufflenet_v2_x0_5":
+                model = tv_models.shufflenet_v2_x0_5(pretrained=True)
+            elif args.baseline_model == "shufflenet_v2_x1_5":
+                model = tv_models.shufflenet_v2_x1_5(pretrained=True)
+            elif args.baseline_model == "shufflenet_v2_x2_0":
+                model = tv_models.shufflenet_v2_x2_0(pretrained=True)
+            else:
+                raise ValueError(f"Unsupported ShuffleNet variant: {args.baseline_model}")
+            model.fc = nn.Linear(model.fc.in_features, args.nb_classes)
+            model = model.to(device)
+        else:
+            model = timm.create_model(args.baseline_model, pretrained=True, num_classes=args.nb_classes).to(device)
+        optimizer = optim.Adam(model.parameters(), args.lr)
+        criterion = nn.CrossEntropyLoss()
+
+        def baseline_loss_fn(x, targets):
+            logits = model(x)
+            loss = criterion(logits, targets)
+            return loss, logits
+
+        loss_fn = baseline_loss_fn
+
+    teacher_model = timm.create_model(args.teacher_model, pretrained=True, num_classes=args.nb_classes).to(device)
+    if not args.baseline and not args.kd:
         model = teacher_model
-    else:
-        teacher_model.load_state_dict(torch.load(
-            'models_para/resnet34.a1_in1k_ptb.pth'))
+        optimizer = optim.Adam(model.parameters(), args.lr)
+        loss_fn = TripletLoss(model=model)
+    
+    if not args.baseline and args.kd:
+        teacher_model.load_state_dict(torch.load(f'models_para/resnet34.a1_in1k_{args.dataset}_kd.pth'), strict=False)
         student_model = timm.create_model(args.student_model, pretrained=True, num_classes=args.nb_classes).to(device)
         optimizer = optim.Adam(student_model.parameters(), args.lr)
         loss_fn = KDLoss(student=(args.student_model, student_model), teacher=(
-            args.teacher_model, teacher_model), base_criterion=nn.CrossEntropyLoss())
+            args.teacher_model, teacher_model), base_criterion=nn.CrossEntropyLoss(), cls_loss_w=1, feat_loss_w=1)
         model = student_model
 
     # 计算FLOPs
     from thop import profile
     dummy_input = torch.randn(1, 3, args.input_size, args.input_size).to(device)
-    teacher_flops, teacher_params = profile(teacher_model, inputs=(dummy_input,))
-    student_flops, student_params = profile(model, inputs=(dummy_input,))
-    print(f"Teacher FLOPs: {teacher_flops/1e9:.2f} GFLOPs, Teacher PARAMS: {teacher_params/1e6:.2f} M")
-    print(f"Student FLOPs: {student_flops/1e9:.2f} GFLOPs, Student PARAMS: {student_params/1e6:.2f} M")
+    model_flops, model_params = profile(model, inputs=(dummy_input,))
+    print(f"Model FLOPs: {model_flops/1e9:.2f} GFLOPs, Student PARAMS: {model_params/1e6:.2f} M")
 
     # 优化器
     scheduler = StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
-
     print(f'Strat training for {args.epochs} epochs')
-
+    # 开始训练
     import time
     start_time = time.time()
 
@@ -170,7 +204,7 @@ def main(args):
             min_loss = v_loss
             print("save model")
             torch.save(model.state_dict(),
-                       f"models_para/{model_name}_{args.dataset}.pth")
+                       f"models_para/{model_name}_{args.dataset}_{'baseline' if args.baseline else 'kd'}.pth")
 
         # 保存loss acc
         t_loss_vec.append(t_loss)
@@ -179,44 +213,32 @@ def main(args):
         v_acc_vec.append(v_acc)
 
         # 更新Dataset
-        if not args.kd:
+        if not args.kd and not args.baseline:
             dataset_train.set_samples()
         # 更新学习率
         scheduler.step()
     
     end_time = time.time()
     print(f"Training finished in {end_time - start_time:.2f}s")
-    
-        
 
-    # 画图
-    xr = args.epochs
-    plt.figure()
-    plt.plot(list(range(xr)), t_acc_vec, label='train')
-    plt.plot(list(range(xr)), v_acc_vec, label='valid', ls='--')
-    plt.xlabel('epoch')
-    plt.ylabel('acc')
-    plt.xticks()
-    plt.yticks()
-    plt.title(f'{model_name} acc')
-    plt.legend()
-    plt.grid(ls='--')
-    plt.savefig(f'{args.output_dir}/{model_name}_{args.dataset}_acc.png')
-
-    # 损失函数图
-    plt.figure()
-    plt.plot(list(range(xr)), t_loss_vec, label='train')
-    plt.plot(list(range(xr)), v_loss_vec, label='valid', ls='--')
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.xticks()
-    plt.yticks()
-    plt.title(f'{model_name} loss')
-    plt.legend()
-    plt.grid(ls='--')
-    plt.savefig(f'{args.output_dir}/{model_name}_{args.dataset}_loss.png')
+    # 保存每个epoch的指标到txt
+    os.makedirs(args.output_dir, exist_ok=True)
+    tag = "baseline" if args.baseline else ("kd" if args.kd else "teacher")
+    metrics_path = os.path.join(
+        args.output_dir,
+        f"{model_name}_{args.dataset}_{tag}_metrics.txt"
+    )
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        f.write("epoch\ttrain_loss\ttrain_acc\tval_loss\tval_acc\n")
+        for i in range(args.epochs):
+            f.write(
+                f"{i + 1}\t"
+                f"{t_loss_vec[i]:.6f}\t{t_acc_vec[i]:.6f}\t"
+                f"{v_loss_vec[i]:.6f}\t{v_acc_vec[i]:.6f}\n"
+            )
 
 
 if __name__ == '__main__':
     args = get_args()
+    print(args)
     main(args)

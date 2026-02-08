@@ -1,0 +1,31 @@
+[train]
+batch_size = 32
+batch_classes_num = 8
+epochs = 20
+
+[model]
+input_size = 224
+teacher_model = "resnet34.a1_in1k"
+student_model = "deit_tiny_patch16_224"
+baseline_model = "mobilenetv3_small_050"
+# squeezenet1_1
+# deit_tiny_patch16_224
+
+[optim]
+opt = "adamw"
+lr = 0.0005
+step_size = 10
+gamma = 0.5
+
+[kd]
+kd = false
+
+[baseline]
+baseline = true
+
+[data]
+dataset = "ecgid"
+data_path = "data/"
+output_dir = "runs"
+device = "cuda"
+nb_classes = 89

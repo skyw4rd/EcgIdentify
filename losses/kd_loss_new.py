@@ -17,7 +17,7 @@ logger = logging.getLogger()
 
 
 KD_POINTS = {
-    'resnet34.a1_in1k': dict(kd_points=['backbone.layer4'], channels=[512], feature_map_size=(7, 7)),
+    'resnet34.a1_in1k': dict(kd_points=['layer4'], channels=[512], feature_map_size=(7, 7)),
     'mobilenetv3_small_100.lamb_in1k': dict(kd_points=['blocks'], channels=[576], feature_map_size=(7, 7)),
     'deit_tiny_patch16_224': dict(kd_points=['blocks.11'], channels=[192], feature_map_size=None)
 }

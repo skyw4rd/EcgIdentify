@@ -157,7 +157,7 @@ def test_build_dataset():
     ])
 
     dataset = EcgImage(
-        root='F:\\ecg\\EcgIdentify\\data\\ptb\\train',
+        root='F:\\ecg\\EcgIdentify\\data\\ecgid\\train',
         transform=data_transform,
         triplet_batch=(batch_classes_num, batch_img_num))
 
@@ -175,4 +175,4 @@ def build_dataset(args):
         transform=data_transform,
         triplet_batch=(batch_classes_num, batch_img_num))
 
-    return dataset, dataset.get_nb_classes()
+    return dataset
