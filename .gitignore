@@ -2,3 +2,6 @@
 .vscode
 data/
 models_para/
+*.pth
+*.ipynb_checkpoints
+paper/
