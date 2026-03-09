@@ -45,7 +45,7 @@ class TripletLoss(Loss):
         if feature_dim is None:
             raise ValueError('Cannot infer feature_dim from model; please pass feature_dim')
         self.embedding_head = EmbeddingHead(feature_dim, target_dim)
-        self.triplet_loss = nn.TripletMarginLoss(margin=0.7, p=2)
+        self.triplet_loss = nn.TripletMarginLoss(margin=1, p=2)
         self.cross_entropy_loss = nn.CrossEntropyLoss()
 
     def parameters(self):

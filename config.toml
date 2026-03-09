@@ -1,31 +1,33 @@
 [train]
-batch_size = 32
+batch_size = 128
 batch_classes_num = 8
-epochs = 20
-
+epochs = 10
 [model]
 input_size = 224
 teacher_model = "resnet34.a1_in1k"
 student_model = "deit_tiny_patch16_224"
-baseline_model = "mobilenetv3_small_050"
+baseline_model = "deit_tiny_patch16_224"
 # squeezenet1_1
 # deit_tiny_patch16_224
+# shallow_cnn
 
 [optim]
 opt = "adamw"
 lr = 0.0005
-step_size = 10
-gamma = 0.5
+step_size = 5
+gamma = 0.7
 
 [kd]
-kd = false
+kd = false 
 
 [baseline]
 baseline = true
 
 [data]
-dataset = "ecgid"
+dataset = "ptb"
 data_path = "data/"
 output_dir = "runs"
 device = "cuda"
-nb_classes = 89
+nb_classes = 282
+cv_fold_idx = 1
+cv_seed = 3407

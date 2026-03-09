@@ -20,7 +20,7 @@ def pil_loader(path: str) -> Image.Image:
 
 
 class EcgImage(data.Dataset):
-    def __init__(self, root, transform=None, train=True, test=False, triplet_batch=(8, 4)):
+    def __init__(self, root, transform=None, train=True, test=False, triplet_batch=(8, 4), samples_dict=None):
         self.test = test
         self.root = root
         self.transform = transform
@@ -35,7 +35,15 @@ class EcgImage(data.Dataset):
         self.priority_class_counters = {class_index: Counter(
         ) for class_index in sorted(class_to_idx.values())}
 
-        self.samples_dict = self.make_dataset(self.root, class_to_idx)
+        if samples_dict is None:
+            self.samples_dict = self.make_dataset(self.root, class_to_idx)
+        else:
+            self.samples_dict = {}
+            for cls_name, cls_idx in class_to_idx.items():
+                cls_samples = samples_dict.get(cls_name)
+                if cls_samples is None:
+                    cls_samples = samples_dict.get(cls_idx, [])
+                self.samples_dict[cls_idx] = list(cls_samples)
         self.samples = []
         # train_samples, val_samples = self.divide_samples(self.samples_dict)
         self.set_samples()
@@ -163,16 +171,20 @@ def test_build_dataset():
 
     return dataset, dataset.get_nb_classes()
 
-def build_dataset(args):
+def build_dataset(args, root=None, samples_dict=None):
     batch_classes_num, batch_img_num = args.batch_classes_num, args.batch_size // args.batch_classes_num
     data_transform = transforms.Compose([
         transforms.Resize([args.input_size, args.input_size]),
         transforms.ToTensor(),
     ])
 
+    if root is None:
+        root = args.data_path + args.dataset + '/train'
+
     dataset = EcgImage(
-        root=args.data_path + args.dataset + '/train',
+        root=root,
         transform=data_transform,
-        triplet_batch=(batch_classes_num, batch_img_num))
+        triplet_batch=(batch_classes_num, batch_img_num),
+        samples_dict=samples_dict)
 
     return dataset
