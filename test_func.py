@@ -212,7 +212,7 @@ def eval_class_level_metrics(
 
 # 你原来的函数可以这样包一下
 def test_one_fold(model, dataset_val, device="cuda"):
-    metrics, conf_mat, class_ids = eval_sample_level_metrics(
+    metrics, vote_pred_per_class , conf_mat, class_ids = eval_class_level_metrics(
         model=model,
         dataset_val=dataset_val,
         device=device,

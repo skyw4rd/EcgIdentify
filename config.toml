@@ -1,15 +1,46 @@
 [train]
-batch_size = 128
+batch_size = 64
 batch_classes_num = 8
-epochs = 10
+epochs = 30
 [model]
 input_size = 224
 teacher_model = "resnet34.a1_in1k"
 student_model = "deit_tiny_patch16_224"
-baseline_model = "deit_tiny_patch16_224"
-# squeezenet1_1
-# deit_tiny_patch16_224
-# shallow_cnn
+baseline_model = "resnet34.a1_in1k"
+pretrained = true
+teacher_pretrained = false
+student_pretrained = true
+
+# Method 1: shallow CNN (2D image)
+# baseline_model = "shallow_cnn"
+
+# Method 2: deep CNN (2D image)
+# baseline_model = "resnet34"
+# baseline_model = "densenet121"
+
+# Method 3: ViT encoder stack (2D image)
+# baseline_model = "simple_vit"
+vit_patch_size = 16
+vit_embed_dim = 256
+vit_depth = 4
+vit_num_heads = 8
+vit_mlp_ratio = 4.0
+vit_dropout = 0.1
+
+# Method 4: classic lightweight model (2D image)
+# baseline_model = "mobilenet_v3_small"
+# baseline_model = "mobilenetv4_conv_small"
+# baseline_model = "shufflenet_v2_x1_0"
+
+# Method 5: newer lightweight model (2D image, timm)
+# baseline_model = "efficientvit_m0"
+
+# Method 6/7: ECGID-specific baselines (2D image)
+# baseline_model = "edith"
+# baseline_model = "ecgiot"
+# baseline_model = "ecgxtractor"
+edith_emb_dim = 256
+ecgiot_width_mult = 1.0
 
 [optim]
 opt = "adamw"
@@ -17,11 +48,14 @@ lr = 0.0005
 step_size = 5
 gamma = 0.7
 
+[scheme]
+scheme = 'A'
+
 [kd]
-kd = false 
+kd = true
 
 [baseline]
-baseline = true
+baseline = false
 
 [data]
 dataset = "ptb"

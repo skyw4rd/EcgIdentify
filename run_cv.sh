@@ -80,6 +80,49 @@ config_path.write_text(updated, encoding="utf-8")
 PY
 }
 
+get_toml_key() {
+  local config="$1"
+  local key="$2"
+  local py_bin="$3"
+
+  "$py_bin" - "$config" "$key" <<'PY'
+import pathlib
+import sys
+
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:
+    import tomli as tomllib  # Python <=3.10
+
+config_path = pathlib.Path(sys.argv[1])
+key = sys.argv[2]
+
+if not config_path.is_file():
+    raise SystemExit(f"Config not found: {config_path}")
+
+data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+
+def find_key(obj, target):
+    if isinstance(obj, dict):
+        if target in obj and not isinstance(obj[target], dict):
+            return obj[target]
+        for value in obj.values():
+            found = find_key(value, target)
+            if found is not None:
+                return found
+    return None
+
+value = find_key(data, key)
+if value is None:
+    raise SystemExit(f"Key not found in {config_path}: {key}")
+
+if isinstance(value, bool):
+    print(str(value).lower())
+else:
+    print(value)
+PY
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -c|--config)
@@ -183,11 +226,35 @@ for override in "${OVERRIDES[@]}"; do
   set_toml_key "$CONFIG_PATH" "$key" "$value" "$PYTHON_BIN"
 done
 
+KD_ENABLED="$(get_toml_key "$CONFIG_PATH" "kd" "$PYTHON_BIN")"
+BASELINE_ENABLED="$(get_toml_key "$CONFIG_PATH" "baseline" "$PYTHON_BIN")"
+DATASET="$(get_toml_key "$CONFIG_PATH" "dataset" "$PYTHON_BIN")"
+TEACHER_MODEL="$(get_toml_key "$CONFIG_PATH" "teacher_model" "$PYTHON_BIN")"
+TEACHER_DIR="models_para/${DATASET}/resnet34"
+
+if [[ "$KD_ENABLED" == "true" && "$BASELINE_ENABLED" != "true" ]]; then
+  if [[ ! -d "$TEACHER_DIR" ]]; then
+    echo "Teacher checkpoint directory not found: $TEACHER_DIR" >&2
+    exit 1
+  fi
+  echo "KD mode enabled. Teacher checkpoint dir: $TEACHER_DIR"
+fi
+
 for (( fold=START_FOLD; fold<=END_FOLD; fold++ )); do
   fold_human=$((fold + 1))
   echo "========== Fold ${fold_human}/${FOLDS} (cv_fold_idx=${fold}) =========="
   set_toml_key "$CONFIG_PATH" "cv_fold_idx" "$fold" "$PYTHON_BIN"
-  "$PYTHON_BIN" main.py
+  if [[ "$KD_ENABLED" == "true" && "$BASELINE_ENABLED" != "true" ]]; then
+    teacher_ckpt="${TEACHER_DIR}/${TEACHER_MODEL}_${DATASET}_f${fold_human}_kd.pth"
+    if [[ ! -f "$teacher_ckpt" ]]; then
+      echo "Teacher checkpoint not found for fold ${fold_human}: $teacher_ckpt" >&2
+      exit 1
+    fi
+    echo "Teacher checkpoint: $teacher_ckpt"
+    TEACHER_CKPT_PATH="$teacher_ckpt" "$PYTHON_BIN" main.py
+  else
+    "$PYTHON_BIN" main.py
+  fi
 done
 
 echo "All folds finished."

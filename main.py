@@ -4,6 +4,7 @@
 import logging
 import os
 import random
+from glob import glob
 
 try:
     import tomllib  # Python 3.11+
@@ -11,7 +12,7 @@ except ModuleNotFoundError:
     import tomli as tomllib  # Python <=3.10
 
 import torch
-from torch import logit, nn
+from torch import nn
 from torch import optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Subset
@@ -27,12 +28,33 @@ from dataset import build_dataset
 from train_func import train_one_epoch, val_one_epoch
 # from timm.optim import create_optimizer
 from models.simple_cnn import ShallowCNN
+from models.simple_vit import SimpleViT
+from models.ecg_baselines import EDITHNet, ECGIoTNet, ECGXtractorNet
 from test_func import test_one_fold
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+_TORCHVISION_BASELINE_FACTORIES = {
+    "squeezenet1_0": tv_models.squeezenet1_0,
+    "squeezenet1_1": tv_models.squeezenet1_1,
+    "shufflenet_v2_x0_5": tv_models.shufflenet_v2_x0_5,
+    "shufflenet_v2_x1_0": tv_models.shufflenet_v2_x1_0,
+    "shufflenet_v2_x1_5": tv_models.shufflenet_v2_x1_5,
+    "shufflenet_v2_x2_0": tv_models.shufflenet_v2_x2_0,
+    "mobilenet_v3_small": tv_models.mobilenet_v3_small,
+    "mobilenet_v3_large": tv_models.mobilenet_v3_large,
+    "densenet121": tv_models.densenet121,
+    "densenet161": tv_models.densenet161,
+    "densenet169": tv_models.densenet169,
+    "densenet201": tv_models.densenet201,
+    "resnet18": tv_models.resnet18,
+    "resnet34": tv_models.resnet34,
+    "resnet50": tv_models.resnet50,
+}
 
 
 def _flatten_config(config):
@@ -165,6 +187,119 @@ def _build_train_val_for_cv(args, data_transform):
     return train_dataset, val_dataset, cv_tag
 
 
+def _resolve_teacher_checkpoint(args):
+    """Resolve fold-specific teacher checkpoint path for KD runs."""
+    env_path = os.getenv('TEACHER_CKPT_PATH', '').strip()
+    if env_path:
+        if not os.path.isfile(env_path):
+            raise FileNotFoundError(f'TEACHER_CKPT_PATH does not exist: {env_path}')
+        return env_path
+
+    fold_idx = int(getattr(args, 'cv_fold_idx', 0))
+    fold_human = fold_idx + 1
+    teacher_dir = os.path.join('models_para', args.dataset, 'resnet34')
+    teacher_name = str(getattr(args, 'teacher_model', '')).strip()
+
+    bsl_or_kd = 'baseline' if args.scheme == 'B' else 'kd'
+    expected = [
+        os.path.join(teacher_dir, f'{teacher_name}_{args.dataset}_f{fold_human}_{bsl_or_kd}.pth'),
+        os.path.join(teacher_dir, f'{teacher_name}_{args.dataset}_f{fold_human}.pth'),
+        os.path.join(teacher_dir, f'triplet_f{fold_human}.pth'),
+    ]
+    for candidate in expected:
+        if os.path.isfile(candidate):
+            return candidate
+
+    matched = sorted(glob(os.path.join(teacher_dir, f'*_f{fold_human}_*.pth')))
+    if len(matched) == 1:
+        return matched[0]
+    if len(matched) > 1:
+        raise FileNotFoundError(
+            f'Multiple teacher checkpoints found for fold f{fold_human} under {teacher_dir}: {matched}'
+        )
+
+    raise FileNotFoundError(
+        f'No teacher checkpoint found for fold f{fold_human} under {teacher_dir}. '
+        f'Tried: {expected}'
+    )
+
+
+def _replace_classifier_head(model, num_classes):
+    if hasattr(model, "fc") and isinstance(model.fc, nn.Linear):
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        return model
+
+    if hasattr(model, "classifier"):
+        classifier = model.classifier
+
+        if isinstance(classifier, nn.Linear):
+            model.classifier = nn.Linear(classifier.in_features, num_classes)
+            return model
+
+        if isinstance(classifier, nn.Sequential) and len(classifier) > 0:
+            last = classifier[-1]
+            if isinstance(last, nn.Linear):
+                classifier[-1] = nn.Linear(last.in_features, num_classes)
+                return model
+            if isinstance(last, nn.Conv2d):
+                classifier[-1] = nn.Conv2d(last.in_channels, num_classes, kernel_size=1)
+                model.num_classes = num_classes
+                return model
+
+    raise ValueError(f"Unsupported classifier head for model type: {type(model)}")
+
+
+def _create_baseline_model(args, device):
+    model_name = str(args.baseline_model).strip()
+    model_key = model_name.lower()
+    pretrained = bool(getattr(args, "pretrained", True))
+
+    if model_key.startswith("shallow_cnn"):
+        return ShallowCNN(num_classes=args.nb_classes).to(device)
+
+    if model_key in {"simple_vit", "vit_encoder"}:
+        model = SimpleViT(
+            image_size=int(args.input_size),
+            patch_size=int(getattr(args, "vit_patch_size", 16)),
+            in_chans=3,
+            num_classes=args.nb_classes,
+            embed_dim=int(getattr(args, "vit_embed_dim", 256)),
+            depth=int(getattr(args, "vit_depth", 4)),
+            num_heads=int(getattr(args, "vit_num_heads", 8)),
+            mlp_ratio=float(getattr(args, "vit_mlp_ratio", 4.0)),
+            dropout=float(getattr(args, "vit_dropout", 0.1)),
+        )
+        return model.to(device)
+
+    if model_key in {"edith", "edith_cnn"}:
+        model = EDITHNet(
+            in_chans=3,
+            num_classes=args.nb_classes,
+            emb_dim=int(getattr(args, "edith_emb_dim", 256)),
+        )
+        return model.to(device)
+
+    if model_key in {"ecgiot", "ecg_iot", "ecgiot_cnn"}:
+        model = ECGIoTNet(
+            in_chans=3,
+            num_classes=args.nb_classes,
+            width_mult=float(getattr(args, "ecgiot_width_mult", 1.0)),
+        )
+        return model.to(device)
+
+    if model_key in {"ecgxtractor", "ecgxtractor_cnn"}:
+        return ECGXtractorNet(in_chans=3, num_classes=args.nb_classes).to(device)
+
+    if model_key in _TORCHVISION_BASELINE_FACTORIES:
+        model = _TORCHVISION_BASELINE_FACTORIES[model_key](pretrained=pretrained)
+        model = _replace_classifier_head(model, args.nb_classes)
+        return model.to(device)
+
+    return timm.create_model(
+        model_name, pretrained=pretrained, num_classes=args.nb_classes
+    ).to(device)
+
+
 def main(args):
     """主函数"""
     print(args)
@@ -207,34 +342,7 @@ def main(args):
     
     # 损失函数
     if args.baseline:
-        if args.baseline_model.startswith("squeezenet"):
-            if args.baseline_model == "squeezenet1_1":
-                model = tv_models.squeezenet1_1(pretrained=True)
-            elif args.baseline_model == "squeezenet1_0":
-                model = tv_models.squeezenet1_0(pretrained=True)
-            else:
-                raise ValueError(f"Unsupported SqueezeNet variant: {args.baseline_model}")
-            model.classifier[1] = nn.Conv2d(512, args.nb_classes, kernel_size=1)
-            model.num_classes = args.nb_classes
-            model = model.to(device)
-        elif args.baseline_model.startswith("shallow_cnn"):
-            model = ShallowCNN(num_classes=args.nb_classes)
-            model.to(device)
-        elif args.baseline_model.startswith("shufflenet_v2_"):
-            if args.baseline_model == "shufflenet_v2_x1_0":
-                model = tv_models.shufflenet_v2_x1_0(pretrained=True)
-            elif args.baseline_model == "shufflenet_v2_x0_5":
-                model = tv_models.shufflenet_v2_x0_5(pretrained=True)
-            elif args.baseline_model == "shufflenet_v2_x1_5":
-                model = tv_models.shufflenet_v2_x1_5(pretrained=True)
-            elif args.baseline_model == "shufflenet_v2_x2_0":
-                model = tv_models.shufflenet_v2_x2_0(pretrained=True)
-            else:
-                raise ValueError(f"Unsupported ShuffleNet variant: {args.baseline_model}")
-            model.fc = nn.Linear(model.fc.in_features, args.nb_classes)
-            model = model.to(device)
-        else:
-            model = timm.create_model(args.baseline_model, pretrained=True, num_classes=args.nb_classes).to(device)
+        model = _create_baseline_model(args=args, device=device)
         optimizer = optim.Adam(model.parameters(), args.lr)
         criterion = nn.CrossEntropyLoss()
 
@@ -245,15 +353,28 @@ def main(args):
 
         loss_fn = baseline_loss_fn
 
-    teacher_model = timm.create_model(args.teacher_model, pretrained=False, num_classes=args.nb_classes).to(device)
+    teacher_pretrained = bool(getattr(args, "teacher_pretrained", False))
+    student_pretrained = bool(getattr(args, "student_pretrained", True))
+
+    teacher_model = timm.create_model(
+        args.teacher_model,
+        pretrained=teacher_pretrained,
+        num_classes=args.nb_classes
+    ).to(device)
     if not args.baseline and not args.kd:
         model = teacher_model
         optimizer = optim.Adam(model.parameters(), args.lr)
         loss_fn = TripletLoss(model=model)
     
     if not args.baseline and args.kd:
-        teacher_model.load_state_dict(torch.load(f'models_para/{args.dataset}/resnet34/baseline.pth'), strict=False)
-        student_model = timm.create_model(args.student_model, pretrained=True, num_classes=args.nb_classes).to(device)
+        teacher_ckpt_path = _resolve_teacher_checkpoint(args)
+        print(f'Loading teacher checkpoint: {teacher_ckpt_path}')
+        teacher_model.load_state_dict(torch.load(teacher_ckpt_path, map_location=device), strict=False)
+        student_model = timm.create_model(
+            args.student_model,
+            pretrained=student_pretrained,
+            num_classes=args.nb_classes
+        ).to(device)
         optimizer = optim.Adam(student_model.parameters(), args.lr)
         loss_fn = KDLoss(student=(args.student_model, student_model), teacher=(
             args.teacher_model, teacher_model), base_criterion=nn.CrossEntropyLoss(), cls_loss_w=0.3, feat_loss_w=1)
