@@ -10,8 +10,11 @@
 # M6 edith
 # M7 ecgxtractor   # 若你想换成 ecgiot，把这个改成 ecgiot
 
-for d in ptb ecgid cybhi; do
-  for m in shallow_cnn resnet34 simple_vit mobilenetv4_conv_small efficientvit_m0 edith ecgxtractor; do
+
+# for m in shallow_cnn resnet34 simple_vit mobilenetv4_conv_small efficientvit_m0 edith ecgxtractor; do
+
+for d in ecgid cybhi; do
+  for m in simple_vit; do
     echo "=== dataset=$d, model=$m ==="
     ./run_cv.sh -k 5 --start-fold 0 --end-fold 4 \
       -s baseline=true \

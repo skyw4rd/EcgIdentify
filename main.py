@@ -439,6 +439,7 @@ def main(args):
     model.load_state_dict(torch.load(model_path), strict=False)
     metric = test_one_fold(model, dataset_val=dataset_val)
     print(metric)
+    os.remove(model_path)
 
     # 保存每个epoch的指标到txt
     os.makedirs(args.output_dir, exist_ok=True)

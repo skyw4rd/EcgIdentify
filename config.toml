@@ -1,7 +1,7 @@
 [train]
 batch_size = 64
 batch_classes_num = 8
-epochs = 30
+epochs = 60
 [model]
 input_size = 224
 teacher_model = "resnet34.a1_in1k"
